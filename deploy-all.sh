@@ -5,9 +5,11 @@
 set -e  # Stop bij errors
 
 DEPLOYMENT_TYPE="${1:-assignment2}"  # Default: assignment2
+REGION="${2:-us-east-1}"  # Default: us-east-1 (AWS Academy default)
 
 echo "🚀 Starting deployment..."
 echo "📋 Deployment type: $DEPLOYMENT_TYPE"
+echo "🌍 Region: $REGION"
 
 # Deploy Base stack (altijd nodig)
 echo ""
@@ -15,12 +17,12 @@ echo "📦 Deploying Base stack (VPC, Subnets, etc.)..."
 aws cloudformation create-stack \
   --stack-name MyBase \
   --template-body file://w1_base_cf_file.yml \
-  --region eu-west-1 2>/dev/null || echo "ℹ️  Base stack already exists, continuing..."
+  --region $REGION 2>/dev/null || echo "ℹ️  Base stack already exists, continuing..."
 
 echo "⏳ Waiting for Base stack to complete..."
 aws cloudformation wait stack-create-complete \
   --stack-name MyBase \
-  --region eu-west-1
+  --region $REGION
 echo "✅ Base stack is COMPLETE!"
 
 if [ "$DEPLOYMENT_TYPE" = "assignment1" ]; then
@@ -31,12 +33,12 @@ if [ "$DEPLOYMENT_TYPE" = "assignment1" ]; then
     --stack-name MyInstances \
     --template-body file://w2_assignment_1_instances.yml \
     --parameters ParameterKey=BaseStackName,ParameterValue=MyBase \
-    --region eu-west-1
+    --region $REGION
 
   echo "⏳ Waiting for Instances stack to complete..."
   aws cloudformation wait stack-create-complete \
     --stack-name MyInstances \
-    --region eu-west-1
+    --region $REGION
   echo "✅ Instances stack is COMPLETE!"
 
   echo ""
@@ -45,12 +47,12 @@ if [ "$DEPLOYMENT_TYPE" = "assignment1" ]; then
     --stack-name MyALB \
     --template-body file://w2_assignment_1_alb.yml \
     --parameters ParameterKey=BaseStackName,ParameterValue=MyBase \
-    --region eu-west-1
+    --region $REGION
 
   echo "⏳ Waiting for ALB stack to complete..."
   aws cloudformation wait stack-create-complete \
     --stack-name MyALB \
-    --region eu-west-1
+    --region $REGION
   echo "✅ ALB stack is COMPLETE!"
 
   # Get the URL
@@ -59,7 +61,7 @@ if [ "$DEPLOYMENT_TYPE" = "assignment1" ]; then
   echo "🌐 Your application is available at:"
   aws cloudformation describe-stacks \
     --stack-name MyALB \
-    --region eu-west-1 \
+    --region $REGION \
     --query "Stacks[0].Outputs[?OutputKey=='ALBDNSName'].OutputValue" \
     --output text
 
@@ -71,12 +73,12 @@ elif [ "$DEPLOYMENT_TYPE" = "assignment2" ]; then
     --stack-name MyASG \
     --template-body file://w2_autoscaling.yml \
     --parameters ParameterKey=BaseStackName,ParameterValue=MyBase \
-    --region eu-west-1
+    --region $REGION
 
   echo "⏳ Waiting for Auto Scaling stack to complete..."
   aws cloudformation wait stack-create-complete \
     --stack-name MyASG \
-    --region eu-west-1
+    --region $REGION
   echo "✅ Auto Scaling stack is COMPLETE!"
 
   # Get the URL
@@ -85,7 +87,7 @@ elif [ "$DEPLOYMENT_TYPE" = "assignment2" ]; then
   echo "🌐 Your application is available at:"
   aws cloudformation describe-stacks \
     --stack-name MyASG \
-    --region eu-west-1 \
+    --region $REGION \
     --query "Stacks[0].Outputs[?OutputKey=='ALBDNSName'].OutputValue" \
     --output text
   
