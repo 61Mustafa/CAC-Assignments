@@ -1,0 +1,294 @@
+# Template Description:
+# This template creates an Auto Scaling Group with Application Load Balancer.
+# The ASG automatically scales instances based on request count per target.
+# It IMPORTS VPC and subnets from the base template.
+Description: Auto Scaling Group with Load Balancer for the web application.
+
+Parameters:
+  # BaseStackName:
+  # What: The name of the CloudFormation stack that contains the base VPC and networking resources.
+  # Why: We need to import the VPC and subnet IDs from that stack.
+  BaseStackName:
+    Description: Name of the base stack to import values from
+    Type: String
+    Default: MyBase
+
+  # KeyName:
+  # What: Name of an existing EC2 KeyPair for SSH access.
+  # Why: Allows you to SSH into instances for debugging.
+  KeyName:
+    Description: Name of an existing EC2 KeyPair for SSH access
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: vockey
+
+  # LatestAmiId:
+  # What: Amazon Linux 2 AMI ID (dynamically retrieved).
+  # Why: The Launch Template needs an AMI to create instances.
+  LatestAmiId:
+    Description: Latest Amazon Linux 2 AMI
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+  # DesiredCapacity:
+  # What: The desired number of instances that should be running.
+  # Why: Auto Scaling will try to maintain this number of instances.
+  DesiredCapacity:
+    Description: Desired number of instances
+    Type: Number
+    Default: 2
+
+  # MinSize:
+  # What: Minimum number of instances in the Auto Scaling Group.
+  # Why: ASG will never scale below this number.
+  MinSize:
+    Description: Minimum number of instances
+    Type: Number
+    Default: 1
+
+  # MaxSize:
+  # What: Maximum number of instances in the Auto Scaling Group.
+  # Why: ASG will never scale above this number (prevents runaway costs).
+  MaxSize:
+    Description: Maximum number of instances
+    Type: Number
+    Default: 4
+
+  # TargetRequestCountPerTarget:
+  # What: Target number of requests per instance (triggers scaling).
+  # Why: When requests exceed this, ASG adds instances. When below, it removes instances.
+  #      Set to 1 for testing (easy to trigger scaling by refreshing browser).
+  TargetRequestCountPerTarget:
+    Description: Target request count per instance for scaling
+    Type: Number
+    Default: 1
+
+Resources:
+  # WebServerSecurityGroup:
+  # What: Security group for the web server instances.
+  # Why: Allows HTTP (80) for web traffic and SSH (22) for administration.
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP and SSH access to web servers
+      VpcId:
+        Fn::ImportValue: !Sub "${BaseStackName}:VPC"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: WebServerSecurityGroup
+
+  # ALBSecurityGroup:
+  # What: Security group for the Application Load Balancer.
+  # Why: Allows HTTP traffic from the internet to reach the ALB.
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP access to ALB
+      VpcId:
+        Fn::ImportValue: !Sub "${BaseStackName}:VPC"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: ALBSecurityGroup
+
+  # LaunchTemplate:
+  # What: Defines how EC2 instances should be configured when the ASG creates them.
+  # Why: The Auto Scaling Group uses this as a blueprint to launch instances.
+  #      Similar to a Launch Configuration but newer and more flexible.
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: WebAppLaunchTemplate
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: t2.micro
+        KeyName: !Ref KeyName
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        # UserData:
+        # What: Bash script that runs when instance starts.
+        # Why: Automatically installs Node.js, clones the web app, and starts it.
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            # Update system packages
+            yum update -y
+            
+            # Install git
+            yum install -y git
+            
+            # Install Node.js version 16
+            curl -sL https://rpm.nodesource.com/setup_16.x | bash -
+            yum install -y nodejs
+            
+            # Clone the web application from GitHub
+            cd /home/ec2-user
+            git clone https://github.com/TimothySealy/cac-simple-webapp.git
+            cd cac-simple-webapp
+            
+            # Install dependencies and run the application on port 80
+            npm install
+            sudo PORT=80 nohup node app.js > /var/log/webapp.log 2>&1 &
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: ASG-WebInstance
+
+  # ApplicationLoadBalancer:
+  # What: Load balancer that distributes traffic across Auto Scaling Group instances.
+  # Why: Provides a single entry point and automatically routes traffic to healthy instances.
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: WebAppASG-ALB
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
+      Subnets:
+        - Fn::ImportValue: !Sub "${BaseStackName}:MyFirstSubnet"
+        - Fn::ImportValue: !Sub "${BaseStackName}:MySecondSubnet"
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: WebAppASG-ALB
+
+  # TargetGroup:
+  # What: Logical grouping of instances that receive traffic from the ALB.
+  # Why: The Auto Scaling Group registers instances here automatically.
+  #      Health checks ensure only healthy instances receive traffic.
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: WebAppASG-TG
+      Port: 80
+      Protocol: HTTP
+      VpcId:
+        Fn::ImportValue: !Sub "${BaseStackName}:VPC"
+      TargetType: instance
+      # Health Check Configuration:
+      # What: Regular checks to determine if instances are healthy.
+      # Why: Unhealthy instances are removed from rotation automatically.
+      HealthCheckEnabled: true
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Tags:
+        - Key: Name
+          Value: WebAppASG-TG
+
+  # ALBListener:
+  # What: Listens for incoming HTTP requests on port 80.
+  # Why: Forwards traffic to the target group (and thus to instances).
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # AutoScalingGroup:
+  # What: Manages a fleet of EC2 instances automatically.
+  # Why: Automatically adds/removes instances based on demand (scaling policy).
+  #      Ensures high availability by spreading instances across multiple AZs.
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: WebAppASG
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: !Ref MinSize
+      MaxSize: !Ref MaxSize
+      DesiredCapacity: !Ref DesiredCapacity
+      # VPCZoneIdentifier:
+      # What: List of subnet IDs where instances will be launched.
+      # Why: Instances are distributed across multiple AZs for high availability.
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub "${BaseStackName}:MyFirstSubnet"
+        - Fn::ImportValue: !Sub "${BaseStackName}:MySecondSubnet"
+      # TargetGroupARNs:
+      # What: Links the ASG to the ALB target group.
+      # Why: New instances are automatically registered with the load balancer.
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      HealthCheckType: ELB # Use ALB health checks (more reliable than EC2 checks)
+      HealthCheckGracePeriod: 300 # Wait 5 minutes before checking health (gives time for app to start)
+      Tags:
+        - Key: Name
+          Value: ASG-WebInstance
+          PropagateAtLaunch: true
+
+  # ScalingPolicy:
+  # What: Defines when and how to scale the Auto Scaling Group.
+  # Why: Automatically adds instances when request count is high, removes when low.
+  #      Uses "Target Tracking" - ASG tries to keep requests per target at the specified value.
+  ScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      # TargetTrackingConfiguration:
+      # What: Configuration for target tracking scaling policy.
+      # Why: ASG will add/remove instances to maintain the target request count.
+      TargetTrackingConfiguration:
+        # PredefinedMetricSpecification:
+        # What: Uses AWS's built-in metric for "requests per target".
+        # Why: This metric is tracked by the ALB and CloudWatch automatically.
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ALBRequestCountPerTarget
+          # ResourceLabel:
+          # What: Identifies which target group to monitor.
+          # Why: Links the policy to our specific ALB and target group.
+          ResourceLabel: !Join
+            - '/'
+            - - !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
+              - !GetAtt TargetGroup.TargetGroupFullName
+        TargetValue: !Ref TargetRequestCountPerTarget # Target: 1 request per instance (easy to trigger for testing)
+
+Outputs:
+  # ALBDNSName:
+  # What: Outputs the DNS name of the Application Load Balancer.
+  # Why: This is the URL you use to access your web application.
+  ALBDNSName:
+    Description: DNS name of the Application Load Balancer
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub "${AWS::StackName}:ALBDNSName"
+
+  # AutoScalingGroupName:
+  # What: Outputs the name of the Auto Scaling Group.
+  # Why: Useful for monitoring and debugging in the AWS Console.
+  AutoScalingGroupName:
+    Description: Name of the Auto Scaling Group
+    Value: !Ref AutoScalingGroup
+    Export:
+      Name: !Sub "${AWS::StackName}:ASGName"
+
+  # TargetGroupArn:
+  # What: Outputs the ARN of the target group.
+  # Why: Useful for CloudWatch monitoring and alarms.
+  TargetGroupArn:
+    Description: ARN of the Target Group
+    Value: !Ref TargetGroup
+    Export:
+      Name: !Sub "${AWS::StackName}:TargetGroupArn"
