@@ -1,0 +1,57 @@
+#!/bin/bash
+# Deploy script voor CloudFormation stacks
+# Gebruik: ./deploy-all.sh [assignment1|assignment2]
+
+set -e  # Stop bij errors
+
+DEPLOYMENT_TYPE="${1:-assignment2}"  # Default: assignment2
+REGION="${2:-us-east-1}"  # Default: us-east-1 (AWS Academy default)
+
+echo "🚀 Starting deployment..."
+echo "📋 Deployment type: $DEPLOYMENT_TYPE"
+echo "🌍 Region: $REGION"
+
+# Deploy Base stack (altijd nodig)
+echo ""
+echo "📦 Deploying Base stack (VPC, Subnets, etc.)..."
+aws cloudformation create-stack \
+  --stack-name MyBase \
+  --template-body file://w1_base_cf_file.yml \
+  --region $REGION 2>/dev/null || echo "ℹ️  Base stack already exists, continuing..."
+
+echo "⏳ Waiting for Base stack to complete..."
+aws cloudformation wait stack-create-complete \
+  --stack-name MyBase \
+  --region $REGION
+echo "✅ Base stack is COMPLETE!"
+
+if [ "$DEPLOYMENT_TYPE" = "assignment1" ]; then
+  # Assignment 1: Vaste instances + ALB
+  echo ""
+  echo "📦 Deploying Instances stack (2 fixed EC2 instances)..."
+  aws cloudformation create-stack \
+    --stack-name MyInstances \
+    --template-body file://w2_assignment_1_instances.yml \
+    --parameters ParameterKey=BaseStackName,ParameterValue=MyBase \
+    --region $REGION
+
+  echo "⏳ Waiting for Instances stack to complete..."
+  aws cloudformation wait stack-create-complete \
+    --stack-name MyInstances \
+    --region $REGION
+  echo "✅ Instances stack is COMPLETE!"
+
+  echo ""
+  echo "📦 Deploying ALB stack (Load Balancer)..."
+  aws cloudformation create-stack \
+    --stack-name MyALB \
+    --template-body file://w2_assignment_1_alb.yml \
+    --parameters ParameterKey=BaseStackName,ParameterValue=MyBase \
+    --region $REGION
+
+  echo "⏳ Waiting for ALB stack to complete..."
+  aws cloudformation wait stack-create-complete \
+    --stack-name MyALB \
+    --region $REGION
+  echo "✅ ALB stack is COMPLETE!"
+
