@@ -1,0 +1,225 @@
+# Template Description:
+# This is the BASE template that creates the foundation network infrastructure.
+# Creates a VPC with public and private subnets in two availability zones, internet gateway, and routing.
+# This template EXPORTS resources so other templates (instances and ALB) can import and use them.
+Description: Base VPC (10.0.0.0/16) with public and private subnets in two availability zones.
+
+Parameters:
+  # VPCCIDR:
+  # What: CIDR range for the VPC.
+  # Why: A VPC must have an IP address range to define its network.
+  VPCCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC.
+    Type: String
+    Default: 10.0.0.0/16
+
+  # PUBLICSUBNETCIDR:
+  # What: CIDR range for the public subnet in AZ1.
+  # Why: A subnet needs its own IP range inside the VPC to place resources (like EC2).
+  PUBLICSUBNETCIDR:
+    Description: CIDR for the public subnet in AZ1
+    Type: String
+    Default: 10.0.1.0/24
+
+  # PRIVATESUBNETCIDR:
+  # What: CIDR range for the private subnet in AZ1.
+  # Why: Private subnets are used for resources that should not be directly accessible from the internet.
+  PRIVATESUBNETCIDR:
+    Description: CIDR for the private subnet in AZ1
+    Type: String
+    Default: 10.0.51.0/24
+
+  # PUBLICSUBNETAZ2CIDR:
+  # What: CIDR range for the public subnet in AZ2.
+  # Why: Load balancers require subnets in at least 2 availability zones for high availability.
+  PUBLICSUBNETAZ2CIDR:
+    Description: CIDR for the public subnet in AZ2
+    Type: String
+    Default: 10.0.2.0/24
+
+  # PRIVATESUBNETAZ2CIDR:
+  # What: CIDR range for the private subnet in AZ2.
+  # Why: Provides redundancy and high availability for private resources across multiple AZs.
+  PRIVATESUBNETAZ2CIDR:
+    Description: CIDR for the private subnet in AZ2
+    Type: String
+    Default: 10.0.52.0/24
+
+Resources:
+  # MyFirstVPC:
+  # What: Creates the VPC with the CIDR from VPCCIDR.
+  # Why: The VPC is the network container for subnets, routing, and other network resources.
+  #      This is the foundation of your network infrastructure in AWS.
+  MyFirstVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCIDR
+      EnableDnsHostnames: true # Allows instances to have DNS hostnames
+      Tags:
+        - Key: Name
+          Value: CF-VPC-1
+
+  # MyFirstSubnet:
+  # What: Creates the first public subnet in Availability Zone 1 with the CIDR from PUBLICSUBNETCIDR.
+  # Why: EC2 instances must be placed in a subnet. This public subnet will host the first web server instance.
+  #      MapPublicIpOnLaunch ensures instances automatically get a public IP for internet access.
+  MyFirstSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !Ref PUBLICSUBNETCIDR
+      MapPublicIpOnLaunch: true # Automatically assigns public IP to instances in this subnet
+      VpcId: !Ref MyFirstVPC
+      AvailabilityZone: !Select [0, !GetAZs ''] # Selects the first AZ in the region
+      Tags:
+        - Key: Name
+          Value: CF-PUBLIC-SUBNET-AZ1
+
+  # PrivateSubnetAZ1:
+  # What: Creates the first private subnet in Availability Zone 1.
+  # Why: Private subnets are used for resources that should not be directly accessible from the internet.
+  #      Useful for databases, application servers, or backend services that need NAT for outbound access.
+  PrivateSubnetAZ1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !Ref PRIVATESUBNETCIDR
+      MapPublicIpOnLaunch: false # No public IP for instances in private subnets
+      VpcId: !Ref MyFirstVPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: CF-PRIVATE-SUBNET-AZ1
+
+  # PublicSubnetAZ2:
+  # What: Creates the second public subnet in Availability Zone 2.
+  # Why: Application Load Balancers require subnets in at least 2 AZs for high availability and fault tolerance.
+  #      This subnet will host the second web server instance.
+  PublicSubnetAZ2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !Ref PUBLICSUBNETAZ2CIDR
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref MyFirstVPC
+      AvailabilityZone: !Select [1, !GetAZs ''] # Selects the second AZ in the region
+      Tags:
+        - Key: Name
+          Value: CF-PUBLIC-SUBNET-AZ2
+
+  # PrivateSubnetAZ2:
+  # What: Creates the second private subnet in Availability Zone 2.
+  # Why: Provides redundancy and high availability for private resources across multiple availability zones.
+  PrivateSubnetAZ2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !Ref PRIVATESUBNETAZ2CIDR
+      MapPublicIpOnLaunch: false
+      VpcId: !Ref MyFirstVPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: CF-PRIVATE-SUBNET-AZ2
+
+  # MyInternetGateway:
+  # What: Creates an Internet Gateway.
+  # Why: Needed to allow internet connectivity (via routing) for the VPC.
+  MyInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: CF-INTERNETGATEWAY
+
+  # MyInternetGatewayAttachment:
+  # What: Attaches the Internet Gateway to the VPC.
+  # Why: Without this attachment, the IGW is not connected to the VPC and internet routing will not work.
+  MyInternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MyFirstVPC
+      InternetGatewayId: !Ref MyInternetGateway
+
+  # MyPublicRouteTable:
+  # What: Creates a route table in the VPC.
+  # Why: Route tables hold routes (like the default route to the internet gateway).
+  MyPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyFirstVPC
+      Tags:
+        - Key: Name
+          Value: CF-PUB-ROUTE-TABLE
+
+  # MyDefaultRoute:
+  # What: Adds a default route (0.0.0.0/0) to the internet gateway.
+  # Why: Required so traffic to the internet can leave the subnet via the internet gateway.
+  MyDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: MyInternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref MyPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref MyInternetGateway
+
+  # MyPublicSubnetRouteTableAssociation:
+  # What: Associates the first public subnet with the public route table.
+  # Why: Without this association, the subnet would not use the route table, meaning instances would have no internet access.
+  MyPublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref MyFirstSubnet
+      RouteTableId: !Ref MyPublicRouteTable
+
+  # PublicSubnetAZ2RouteTableAssociation:
+  # What: Associates the second public subnet with the public route table.
+  # Why: Both public subnets need the same routing rules to provide internet access to instances in AZ2.
+  PublicSubnetAZ2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetAZ2
+      RouteTableId: !Ref MyPublicRouteTable
+
+Outputs:
+  # VPCRef:
+  # What: Outputs the VPC ID and exports it so other CloudFormation stacks can import it.
+  # Why: The instances and ALB templates need to reference this VPC to create resources inside it.
+  #      The Export allows other stacks to use Fn::ImportValue to get this VPC ID.
+  VPCRef:
+    Description: Reference to the VPC
+    Value: !Ref MyFirstVPC
+    Export:
+      Name: !Join [ ":", [ !Ref "AWS::StackName", VPC ] ] # Creates export name like "MyBase:VPC"
+
+  # MyFirstSubnetRef:
+  # What: Outputs and exports the first public subnet ID.
+  # Why: The instances template needs this to place the first EC2 instance, and the ALB needs it for placement.
+  MyFirstSubnetRef:
+    Description: Reference to the first public subnet (AZ1)
+    Value: !Ref MyFirstSubnet
+    Export:
+      Name: !Join [ ":", [ !Ref "AWS::StackName", MyFirstSubnet ] ]
+
+  # MySecondSubnetRef:
+  # What: Outputs and exports the second public subnet ID.
+  # Why: The instances template needs this to place the second EC2 instance, and the ALB needs it for high availability.
+  MySecondSubnetRef:
+    Description: Reference to the second public subnet (AZ2)
+    Value: !Ref PublicSubnetAZ2
+    Export:
+      Name: !Join [ ":", [ !Ref "AWS::StackName", MySecondSubnet ] ]
+
+  # PrivateSubnetAZ1Ref:
+  # What: Outputs and exports the first private subnet ID.
+  # Why: May be used in future templates for NAT gateway or private resources in AZ1.
+  PrivateSubnetAZ1Ref:
+    Description: Reference to the first private subnet (AZ1)
+    Value: !Ref PrivateSubnetAZ1
+    Export:
+      Name: !Join [ ":", [ !Ref "AWS::StackName", PrivateSubnetAZ1 ] ]
+
+  # PrivateSubnetAZ2Ref:
+  # What: Outputs and exports the second private subnet ID.
+  # Why: May be used in future templates for NAT gateway or private resources in AZ2.
+  PrivateSubnetAZ2Ref:
+    Description: Reference to the second private subnet (AZ2)
+    Value: !Ref PrivateSubnetAZ2
+    Export:
+      Name: !Join [ ":", [ !Ref "AWS::StackName", PrivateSubnetAZ2 ] ]

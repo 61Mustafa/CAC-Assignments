@@ -1,0 +1,170 @@
+# Template Description:
+# This template deploys two EC2 instances with a Node.js web application.
+# It IMPORTS the VPC and subnets from the base template and EXPORTS the instance IDs for the ALB template.
+Description: Deploy two EC2 instances with the web application from GitHub.
+
+Parameters:
+  # BaseStackName:
+  # What: The name of the CloudFormation stack that contains the base VPC and networking resources.
+  # Why: We need to import the VPC and subnet IDs from that stack using Fn::ImportValue.
+  BaseStackName:
+    Description: Name of the base stack to import values from
+    Type: String
+    Default: MyBase
+
+  # KeyName:
+  # What: Name of an existing EC2 KeyPair for SSH access.
+  # Why: Allows you to SSH into the instances for debugging or manual configuration if needed.
+  KeyName:
+    Description: Name of an existing EC2 KeyPair for SSH access
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: vockey
+
+  # LatestAmiId:
+  # What: Amazon Linux 2 AMI ID (dynamically retrieved from AWS Systems Manager Parameter Store).
+  # Why: EC2 instances need an operating system image (AMI) to launch. This ensures we always use the latest Amazon Linux 2.
+  LatestAmiId:
+    Description: Latest Amazon Linux 2 AMI
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+Resources:
+  # WebServerSecurityGroup:
+  # What: Security group that controls network traffic to/from the web server instances.
+  # Why: Acts as a virtual firewall - allows HTTP (port 80) for web traffic and SSH (port 22) for administration.
+  #      Without this, instances would reject all incoming traffic.
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP and SSH access
+      VpcId: 
+        Fn::ImportValue: !Sub "${BaseStackName}:VPC" # Imports VPC ID from the base stack
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0 # Allow HTTP from anywhere (needed for web access)
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0 # Allow SSH from anywhere (consider restricting in production)
+      Tags:
+        - Key: Name
+          Value: WebServerSecurityGroup
+
+  # WebInstance1:
+  # What: First EC2 instance running the Node.js web application in Availability Zone 1.
+  # Why: Hosts one copy of the web application. The load balancer will distribute traffic between this and WebInstance2.
+  #      UserData script automatically installs Node.js, clones the GitHub repo, and starts the application on boot.
+  WebInstance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro # Small instance type (free tier eligible)
+      KeyName: !Ref KeyName
+      ImageId: !Ref LatestAmiId
+      SubnetId:
+        Fn::ImportValue: !Sub "${BaseStackName}:MyFirstSubnet" # Places instance in first public subnet (AZ1)
+      SecurityGroupIds:
+        - !Ref WebServerSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # What: Bash script that runs once when the instance first launches
+          # Why: Automates the setup of the web application without manual intervention
+          
+          # Update system packages
+          yum update -y
+          
+          # Install git (needed to clone the repository)
+          yum install -y git
+          
+          # Install Node.js version 16
+          # Why: The web application is built with Node.js, so we need the runtime
+          curl -sL https://rpm.nodesource.com/setup_16.x | bash -
+          yum install -y nodejs
+          
+          # Clone the web application from GitHub
+          # Why: Gets the application code onto the instance
+          cd /home/ec2-user
+          git clone https://github.com/TimothySealy/cac-simple-webapp.git
+          cd cac-simple-webapp
+          
+          # Install Node.js dependencies and run the application
+          # Why: npm install downloads required packages, and nohup keeps the app running in background
+          npm install
+          sudo PORT=80 nohup node app.js > /var/log/webapp.log 2>&1 &
+          # PORT=80: Run on HTTP port 80 (standard web port)
+          # nohup: Keeps process running even after script ends
+          # &: Runs in background
+          # > /var/log/webapp.log 2>&1: Redirects output to log file for debugging
+      Tags:
+        - Key: Name
+          Value: WebInstance1
+
+  # WebInstance2:
+  # What: Second EC2 instance running the same Node.js web application in Availability Zone 2.
+  # Why: Provides redundancy and high availability. If one instance fails or one AZ goes down, the other keeps serving traffic.
+  #      The load balancer distributes traffic between both instances for better performance.
+  WebInstance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      ImageId: !Ref LatestAmiId
+      SubnetId:
+        Fn::ImportValue: !Sub "${BaseStackName}:MySecondSubnet" # Places instance in second public subnet (AZ2)
+      SecurityGroupIds:
+        - !Ref WebServerSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Same setup script as WebInstance1
+          # Update system packages
+          yum update -y
+          
+          # Install git
+          yum install -y git
+          
+          # Install Node.js
+          curl -sL https://rpm.nodesource.com/setup_16.x | bash -
+          yum install -y nodejs
+          
+          # Clone the web application
+          cd /home/ec2-user
+          git clone https://github.com/TimothySealy/cac-simple-webapp.git
+          cd cac-simple-webapp
+          
+          # Install dependencies and run the application
+          npm install
+          sudo PORT=80 nohup node app.js > /var/log/webapp.log 2>&1 &
+      Tags:
+        - Key: Name
+          Value: WebInstance2
+
+Outputs:
+  # WebInstance1Id:
+  # What: Outputs and exports the ID of the first instance.
+  # Why: The ALB template needs this ID to register the instance in the target group for load balancing.
+  WebInstance1Id:
+    Description: ID of the first web instance
+    Value: !Ref WebInstance1
+    Export:
+      Name: !Sub "${AWS::StackName}:WebInstance1"
+
+  # WebInstance2Id:
+  # What: Outputs and exports the ID of the second instance.
+  # Why: The ALB template needs this ID to register the instance in the target group for load balancing.
+  WebInstance2Id:
+    Description: ID of the second web instance
+    Value: !Ref WebInstance2
+    Export:
+      Name: !Sub "${AWS::StackName}:WebInstance2"
+
+  # WebServerSecurityGroupId:
+  # What: Outputs and exports the security group ID.
+  # Why: May be useful for future templates or for reference. Can be used to add additional rules if needed.
+  WebServerSecurityGroupId:
+    Description: ID of the web server security group
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}:WebServerSecurityGroup"
