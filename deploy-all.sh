@@ -53,6 +53,7 @@ if [ "$DEPLOYMENT_TYPE" = "assignment1" ]; then
     --region eu-west-1
   echo "✅ ALB stack is COMPLETE!"
 
+<<<<<<< Updated upstream
   # Get the URL
   echo ""
   echo "🎉 ASSIGNMENT 1 DEPLOYED SUCCESSFULLY!"
@@ -100,3 +101,14 @@ else
   echo "❌ Invalid deployment type. Use: assignment1 or assignment2"
   exit 1
 fi
+=======
+# Get the URL
+echo ""
+echo "🎉 ALL STACKS DEPLOYED SUCCESSFULLY!"
+echo "🌐 Your application is available at:"
+aws cloudformation describe-stacks \
+  --stack-name MyALB \
+  --region us-east-1 \
+  --query "Stacks[0].Outputs[?OutputKey=='ALBDNSName'].OutputValue" \
+  --output text
+>>>>>>> Stashed changes
