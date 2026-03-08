@@ -31,7 +31,7 @@ if [ "$DEPLOYMENT_TYPE" = "assignment1" ]; then
   echo "📦 Deploying Instances stack (2 fixed EC2 instances)..."
   aws cloudformation create-stack \
     --stack-name MyInstances \
-    --template-body file://w2_assignment_1_instances.yml \
+    --template-body file://w2_instances.yml \
     --parameters ParameterKey=BaseStackName,ParameterValue=MyBase \
     --region $REGION
 
