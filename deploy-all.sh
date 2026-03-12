@@ -72,7 +72,12 @@ elif [ "$DEPLOYMENT_TYPE" = "assignment2" ]; then
   aws cloudformation create-stack \
     --stack-name MyASG \
     --template-body file://w2_autoscaling.yml \
-    --parameters ParameterKey=BaseStackName,ParameterValue=MyBase \
+    --parameters \
+      ParameterKey=BaseStackName,ParameterValue=MyBase \
+      ParameterKey=DesiredCapacity,ParameterValue=2 \
+      ParameterKey=MinSize,ParameterValue=1 \
+      ParameterKey=MaxSize,ParameterValue=4 \
+      ParameterKey=TargetRequestCountPerTarget,ParameterValue=1 \
     --region $REGION
 
   echo "⏳ Waiting for Auto Scaling stack to complete..."
