@@ -56,12 +56,12 @@ Parameters:
   # TargetRequestCountPerTarget:
   # What: Target number of requests per instance (triggers scaling).
   # Why: When requests exceed this, ASG adds instances. When below, it removes instances.
-  #      Set to 0.3 for testing (low threshold makes scaling easier to trigger).
-  #      This means ~18 requests per minute per instance will trigger scaling.
+  #      Set to 0.1 for testing (VERY LOW threshold makes scaling super easy to trigger).
+  #      This means ~6 requests per minute per instance will trigger scaling.
   TargetRequestCountPerTarget:
     Description: Target request count per instance for scaling
     Type: Number
-    Default: 0.3
+    Default: 0.1
 
 Resources:
   # WebServerSecurityGroup:
