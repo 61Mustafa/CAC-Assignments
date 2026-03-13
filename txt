@@ -1,0 +1,17 @@
+# 1. Deploy de base stack met multi-AZ configuratie
+aws cloudformation deploy \
+  --stack-name MyBase \
+  --template-file w2_base_multi_az.yml \
+  --capabilities CAPABILITY_NAMED_IAM
+
+# 2. Deploy de NAT gateway stack (afhankelijk van de base stack)
+aws cloudformation deploy \
+  --stack-name MyNat \
+  --template-file w2_homework_nat.yaml \
+  --parameter-overrides BaseStackName=MyBase
+
+# 3. Deploy de instances stack (afhankelijk van de base stack)
+aws cloudformation deploy \
+  --stack-name MyInstances \
+  --template-file w2_homework_instance.yaml \
+  --parameter-overrides BaseStackName=MyBase KeyName=vockey
