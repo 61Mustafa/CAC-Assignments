@@ -1,0 +1,19 @@
+Parameters:
+  BaseStackName:
+    Type: String
+    Default: MyBase
+
+Resources:
+  NatEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+
+  MyNatGateway:
+    Description: Gateway for private subnet, to get to the internet, but block traffic inside. So ingress is blocked, but egress is not.
+    Type: "AWS::EC2::NatGateway"
+    Properties:
+      SubnetId: Fn::ImportValue: !Sub"${BaseStackName}:MyFirstSubnet"
+      AllocationId: !GetAtt NatEIP:.AllocationId
+  
