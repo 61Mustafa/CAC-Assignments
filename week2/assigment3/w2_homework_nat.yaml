@@ -1,3 +1,6 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: NAT gateway and private route for outbound internet access from private subnet.
+
 Parameters:
   BaseStackName:
     Type: String
@@ -9,11 +12,17 @@ Resources:
     Properties:
       Domain: vpc
 
-
   MyNatGateway:
-    Description: Gateway for private subnet, to get to the internet, but block traffic inside. So ingress is blocked, but egress is not.
-    Type: "AWS::EC2::NatGateway"
+    Type: AWS::EC2::NatGateway
     Properties:
-      SubnetId: Fn::ImportValue: !Sub"${BaseStackName}:MyFirstSubnet"
-      AllocationId: !GetAtt NatEIP:.AllocationId
-  
+      SubnetId:
+        Fn::ImportValue: !Sub "${BaseStackName}:MyFirstSubnet"
+      AllocationId: !GetAtt NatEIP.AllocationId
+
+  MyPrivateDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Fn::ImportValue: !Sub "${BaseStackName}:MyFirstPrivateRouteTable"
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref MyNatGateway
