@@ -1,6 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 
-Base network: VPC (10.0.0.0/16) with one public subnet (/24), one private subnet (/24), an Internet Gateway, and routing for the public subnet.
+Description: Base network: VPC (10.0.0.0/16) with one public subnet (/24), one private subnet (/24), an Internet Gateway, and routing for the public subnet.
 
 Parameters:
   VPCCIDR:
