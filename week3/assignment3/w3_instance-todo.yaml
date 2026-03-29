@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 Instance for Todo WebApp connecting to RDS
+
+Parameters:
+  BaseStackName:
+    Type: String
+    Default: MyBase3
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: vockey
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+  DBUrl:
+    Description: The Database Connection URL (postgres://user:pass@host:port/dbname)
+    Type: String
+
+Resources:
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP and SSH access
+      VpcId: 
+        Fn::ImportValue: !Sub "${BaseStackName}:VPC"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+  WebAppInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      ImageId: !Ref LatestAmiId
+      SubnetId:
+        Fn::ImportValue: !Sub "${BaseStackName}:MyFirstSubnet"
+      SecurityGroupIds:
+        - !Ref WebServerSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y git
+          curl -sL https://rpm.nodesource.com/setup_16.x | bash -
+          yum install -y nodejs
+          
+          cd /home/ec2-user
+          
+          # Haal specifiek de 'todos-postgres' branch op!
+          git clone -b todos-postgres https://github.com/looking4ward/cac-simple-webapp.git
+          cd cac-simple-webapp
+          
+          npm install
+          
+          # Zet de poort en DB_URL in het systeemgeheugen en start de app
+          export PORT=80
+          export DB_URL="${DBUrl}"
+          nohup node app.js > /var/log/webapp.log 2>&1 &
+
+Outputs:
+  WebAppPublicIP:
+    Description: Public IP of the WebApp
+    Value: !GetAtt WebAppInstance.PublicIp

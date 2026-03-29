@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template for Assignment 2 - RDS Postgres Database
+
+Parameters:
+  BaseStackName:
+    Type: String
+    Default: MyBase3
+
+  DatabaseName:
+    Description: Name of the database to create at deployment time
+    Type: String
+    Default: tododb
+
+  UserName:
+    Description: Username so it can be set at deploy time
+    Type: String
+    Default: postgres
+
+  Password:
+    Description: Password so it can be set at deploy time
+    Type: String
+    NoEcho: true
+
+  DatabaseClass:
+    Description: Database Class so the instance type can be set at deployment time
+    Type: String
+    Default: db.t3.micro
+    AllowedValues: [db.t2.micro, db.t3.micro, db.t4g.micro]
+
+Resources:
+  # 1. Security Group voor de Database
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow Postgres (5432) access from VPC
+      VpcId: 
+        Fn::ImportValue: !Sub "${BaseStackName}:VPC"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 10.0.0.0/16 # Staat connecties vanuit de hele VPC (inclusief de EC2 instance) toe
+
+  # 2. Een tweede Subnet (vereist voor RDS DB Subnet Groups) in een andere AZ
+  SecondPrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: 
+        Fn::ImportValue: !Sub "${BaseStackName}:VPC"
+      CidrBlock: 10.0.52.0/24
+      AvailabilityZone: !Select [1, !GetAZs ''] # Kiest automatisch de 2e AZ van de regio (bijv. us-east-1b)
+      Tags:
+        - Key: Name
+          Value: SecondPrivateSubnetForRDS
+
+  # 3. DB Subnet Group (koppelt je bestaande en nieuwe subnet samen)
+  MyDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS Database
+      SubnetIds:
+        - Fn::ImportValue: !Sub "${BaseStackName}:MyFirstPrivateSubnet"
+        - !Ref SecondPrivateSubnet
+
+  # 4. De daadwerkelijke Postgres Database
+  MyPostgresDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: postgres
+      DBInstanceClass: !Ref DatabaseClass
+      DBName: !Ref DatabaseName
+      MasterUsername: !Ref UserName
+      MasterUserPassword: !Ref Password
+      AllocatedStorage: 20
+      DBSubnetGroupName: !Ref MyDBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      PubliclyAccessible: false
+      MultiAZ: false
+
+Outputs:
+  DBEndpointAddress:
+    Description: RDS Endpoint Address
+    Value: !GetAtt MyPostgresDB.Endpoint.Address
+  DBEndpointPort:
+    Description: RDS Endpoint Port
+    Value: !GetAtt MyPostgresDB.Endpoint.Port
