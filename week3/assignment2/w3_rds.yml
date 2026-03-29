@@ -26,7 +26,7 @@ Parameters:
     Type: String
     Default: db.t3.micro
     AllowedValues: [db.t2.micro, db.t3.micro, db.t4g.micro]
-    
+
 Resources:
   # 1. Security Group voor de Database
   RDSSecurityGroup:
@@ -67,7 +67,7 @@ Resources:
     Type: AWS::RDS::DBParameterGroup
     Properties:
       Description: "Force MD5 password encryption for older clients"
-      Family: postgres14
+      Family: postgres17
       Parameters:
         password_encryption: md5
 
