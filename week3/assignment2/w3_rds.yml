@@ -26,7 +26,7 @@ Parameters:
     Type: String
     Default: db.t3.micro
     AllowedValues: [db.t2.micro, db.t3.micro, db.t4g.micro]
-
+    
 Resources:
   # 1. Security Group voor de Database
   RDSSecurityGroup:
@@ -39,21 +39,21 @@ Resources:
         - IpProtocol: tcp
           FromPort: 5432
           ToPort: 5432
-          CidrIp: 10.0.0.0/16 # Staat connecties vanuit de hele VPC (inclusief de EC2 instance) toe
+          CidrIp: 10.0.0.0/16 
 
-  # 2. Een tweede Subnet (vereist voor RDS DB Subnet Groups) in een andere AZ
+  # 2. Een tweede Subnet
   SecondPrivateSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: 
         Fn::ImportValue: !Sub "${BaseStackName}:VPC"
       CidrBlock: 10.0.52.0/24
-      AvailabilityZone: !Select [1, !GetAZs ''] # Kiest automatisch de 2e AZ van de regio (bijv. us-east-1b)
+      AvailabilityZone: !Select [1, !GetAZs ''] 
       Tags:
         - Key: Name
           Value: SecondPrivateSubnetForRDS
 
-  # 3. DB Subnet Group (koppelt je bestaande en nieuwe subnet samen)
+  # 3. DB Subnet Group
   MyDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -62,11 +62,22 @@ Resources:
         - Fn::ImportValue: !Sub "${BaseStackName}:MyFirstPrivateSubnet"
         - !Ref SecondPrivateSubnet
 
-  # 4. De daadwerkelijke Postgres Database
+  # 4. Parameter Group om MD5 encryptie aan te zetten
+  MyPostgresParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: "Force MD5 password encryption for older clients"
+      Family: postgres14
+      Parameters:
+        password_encryption: md5
+
+  # 5. De Postgres Database
   MyPostgresDB:
     Type: AWS::RDS::DBInstance
     Properties:
       Engine: postgres
+      EngineVersion: 14.12
+      DBParameterGroupName: !Ref MyPostgresParameterGroup
       DBInstanceClass: !Ref DatabaseClass
       DBName: !Ref DatabaseName
       MasterUsername: !Ref UserName
