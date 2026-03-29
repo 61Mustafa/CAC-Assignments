@@ -57,7 +57,7 @@ Resources:
       AvailabilityZone: !Ref AvailabilityZone1
       MapPublicIpOnLaunch: true
       VpcId: !Ref MyFirstVPC
-      Tags:
+      Tags: 
         - Key: Name
           Value: MyFirstSubnet
 
