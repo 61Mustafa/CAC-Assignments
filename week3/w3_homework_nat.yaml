@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: NAT gateway and private route for outbound internet access from private subnet.
+
+Parameters:
+  BaseStackName:
+    Type: String
+    Default: MyBase
+
+Resources:
+  NatEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  MyNatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId:
+        Fn::ImportValue: !Sub "${BaseStackName}:MyFirstSubnet"
+      AllocationId: !GetAtt NatEIP.AllocationId
+
+  MyPrivateDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Fn::ImportValue: !Sub "${BaseStackName}:MyFirstPrivateRouteTable"
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref MyNatGateway

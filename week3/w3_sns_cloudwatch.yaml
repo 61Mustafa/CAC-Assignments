@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template for Assignment 1 - SNS, CloudWatch Alarm for NetworkOut, and Instance Shutdown trigger.
+
+Parameters:
+  MyEmailAddress:
+    Description: Please enter your email address to receive notifications.
+    Type: String
+
+  TargetInstanceId:
+    Description: The ID of the EC2 instance you want to monitor (e.g., i-0abcd1234efgh5678).
+    Type: String
+
+Resources:
+  # 1. De SNS Topic
+  MySNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: EC2-Alerts-Topic
+
+  # 2. De Email Subscription (Koppelt jouw email aan de SNS Topic)
+  MyEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: !Ref MyEmailAddress
+      TopicArn: !Ref MySNSTopic
+
+  # 3. Rechten (Policy) zodat CloudWatch en EventBridge berichten naar de SNS Topic mogen sturen
+  SNSTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref MySNSTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - events.amazonaws.com
+                - cloudwatch.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref MySNSTopic
+
+  # 4. EventBridge Rule (Trigger voor wanneer de instance wordt gestopt/shutdown)
+  InstanceShutdownRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Trigger an email when the specific EC2 instance is stopped
+      EventPattern:
+        source:
+          - aws.ec2
+        detail-type:
+          - EC2 Instance State-change Notification
+        detail:
+          state:
+            - stopped
+          instance-id:
+            - !Ref TargetInstanceId
+      Targets:
+        - Arn: !Ref MySNSTopic
+          Id: SendToSNS
+
+  # 5. CloudWatch Alarm (NetworkOut > 1000 bytes for 1 minute)
+  NetworkOutAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm triggers when NetworkOut is above 1000 bytes for 1 minute.
+      MetricName: NetworkOut
+      Namespace: AWS/EC2
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref TargetInstanceId
+      AlarmActions:
+        - !Ref MySNSTopic
