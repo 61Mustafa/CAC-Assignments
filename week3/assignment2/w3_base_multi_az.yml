@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Base network: VPC (10.0.0.0/16) with one public subnet (/24), one private subnet (/24), an Internet Gateway, and routing for the public subnet."
+
+Parameters:
+  VPCCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC.
+    Type: String
+    Default: 10.0.0.0/16
+
+  PublicSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for public subnet 1.
+    Type: String
+    Default: 10.0.1.0/24
+
+  PrivateSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for private subnet 1.
+    Type: String
+    Default: 10.0.51.0/24
+
+  AvailabilityZone1:
+    Description: Please enter the name of the first Availability Zone.
+    Type: String
+    Default: us-east-1a
+
+Resources:
+  # VPC
+  MyFirstVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCIDR
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: MyFirstVPC
+
+  # Internet Gateway
+  MyFirstInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: MyFirstInternetGateway
+
+  # Attach IGW to VPC
+  MyFirstVPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref MyFirstInternetGateway
+      VpcId: !Ref MyFirstVPC
+
+  # Public subnet
+  MyFirstSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !Ref PublicSubnet1CIDR
+      AvailabilityZone: !Ref AvailabilityZone1
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref MyFirstVPC
+      Tags:
+        - Key: Name
+          Value: MyFirstSubnet
+
+  # Private subnet
+  MyFirstPrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      AvailabilityZone: !Ref AvailabilityZone1
+      MapPublicIpOnLaunch: false
+      VpcId: !Ref MyFirstVPC
+      Tags:
+        - Key: Name
+          Value: MyFirstPrivateSubnet
+
+  # Public route table
+  MyFirstRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyFirstVPC
+      Tags:
+        - Key: Name
+          Value: MyFirstRouteTable
+
+  # Default route for public subnet -> IGW
+  MyFirstDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: MyFirstVPCGatewayAttachment
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref MyFirstInternetGateway
+      RouteTableId: !Ref MyFirstRouteTable
+
+  # Associate public route table to public subnet
+  MyFirstSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref MyFirstRouteTable
+      SubnetId: !Ref MyFirstSubnet
+
+  # Optional but explicit: private route table (no default internet route yet)
+  MyFirstPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyFirstVPC
+      Tags:
+        - Key: Name
+          Value: MyFirstPrivateRouteTable
+
+  # Associate private route table to private subnet
+  MyFirstPrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref MyFirstPrivateRouteTable
+      SubnetId: !Ref MyFirstPrivateSubnet
+
+Outputs:
+  VPCRef:
+    Description: Reference to the VPC
+    Value: !Ref MyFirstVPC
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "VPC"]]
+
+  VPCGatewayAttachmentRef:
+    Description: Reference to the VPC gateway attachment
+    Value: !Ref MyFirstVPCGatewayAttachment
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "MyFirstVPCGatewayAttachment"]]
+
+  MyFirstRouteTableRef:
+    Description: Reference to the public VPC route table
+    Value: !Ref MyFirstRouteTable
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "MyFirstRouteTable"]]
+
+  MyFirstPrivateRouteTableRef:
+    Description: Reference to the private VPC route table
+    Value: !Ref MyFirstPrivateRouteTable
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "MyFirstPrivateRouteTable"]]
+
+  MyFirstSubnetRef:
+    Description: Reference to my first public subnet
+    Value: !Ref MyFirstSubnet
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "MyFirstSubnet"]]
+
+  MyFirstPrivateSubnetRef:
+    Description: Reference to my first private subnet
+    Value: !Ref MyFirstPrivateSubnet
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "MyFirstPrivateSubnet"]]
+
+  AvailabilityZone1Ref:
+    Description: Reference to Availability Zone 1
+    Value: !Ref AvailabilityZone1
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "AvailabilityZone1"]]
