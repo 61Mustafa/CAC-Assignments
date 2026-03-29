@@ -76,7 +76,7 @@ Resources:
     Type: AWS::RDS::DBInstance
     Properties:
       Engine: postgres
-      EngineVersion: 14.12
+      EngineVersion: 17.4
       DBParameterGroupName: !Ref MyPostgresParameterGroup
       DBInstanceClass: !Ref DatabaseClass
       DBName: !Ref DatabaseName
