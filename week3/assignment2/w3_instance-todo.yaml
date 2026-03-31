@@ -57,10 +57,12 @@ Resources:
           cd cac-simple-webapp
           
           npm install
-          
+          # Upgrade pg to v8+ for SCRAM-SHA-256 support (required by PostgreSQL 17)
+          npm install pg@8
+
           # Zet de poort en DB_URL in het systeemgeheugen en start de app
           export PORT=80
-          export DB_URL="${DBUrl}"
+          export DB_URL="${DBUrl}?ssl=true&sslmode=no-verify"
           nohup node app.js > /var/log/webapp.log 2>&1 &
 
 Outputs:

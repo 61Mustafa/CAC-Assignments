@@ -1,87 +1,91 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Template for Assignment 2 - RDS Postgres Database
+Description: "MongoDB EC2 instance for the todo web application (Assignment 3)."
 
 Parameters:
   BaseStackName:
     Type: String
     Default: MyBase3
 
-  DatabaseName:
-    Description: Name of the database to create at deployment time
-    Type: String
-    Default: tododb
+  KeyName:
+    Description: Name of an existing EC2 KeyPair for SSH access
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: vockey
 
-  UserName:
-    Description: Username so it can be set at deploy time
-    Type: String
-    Default: postgres
-
-  Password:
-    Description: Password so it can be set at deploy time
-    Type: String
-    NoEcho: true
-
-  DatabaseClass:
-    Description: Database Class so the instance type can be set at deployment time
-    Type: String
-    Default: db.t3.micro
-    AllowedValues: [db.t2.micro, db.t3.micro, db.t4g.micro]
+  LatestAmiId:
+    Description: Latest Amazon Linux 2 AMI
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
 Resources:
-  # 1. Security Group voor de Database
-  RDSSecurityGroup:
+  # Security Group: MongoDB luistert op poort 27017
+  # SSH (22) is ook open zodat je handmatig kunt inloggen voor debugging
+  MongoDBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow Postgres (5432) access from VPC
-      VpcId: 
+      GroupDescription: Allow MongoDB (27017) and SSH (22) access
+      VpcId:
         Fn::ImportValue: !Sub "${BaseStackName}:VPC"
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          CidrIp: 10.0.0.0/16 # Staat connecties vanuit de hele VPC (inclusief de EC2 instance) toe
-
-  # 2. Een tweede Subnet (vereist voor RDS DB Subnet Groups) in een andere AZ
-  SecondPrivateSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: 
-        Fn::ImportValue: !Sub "${BaseStackName}:VPC"
-      CidrBlock: 10.0.52.0/24
-      AvailabilityZone: !Select [1, !GetAZs ''] # Kiest automatisch de 2e AZ van de regio (bijv. us-east-1b)
+          FromPort: 27017
+          ToPort: 27017
+          CidrIp: 10.0.0.0/16  # Toegankelijk vanuit de hele VPC (incl. web app instance)
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: SecondPrivateSubnetForRDS
+          Value: MongoDBSecurityGroup
 
-  # 3. DB Subnet Group (koppelt je bestaande en nieuwe subnet samen)
-  MyDBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
+  # MongoDB EC2 instance in de publieke subnet
+  # UserData installeert MongoDB 7.0, bindt het aan 0.0.0.0 en start de service
+  MongoDBInstance:
+    Type: AWS::EC2::Instance
     Properties:
-      DBSubnetGroupDescription: Subnet group for RDS Database
-      SubnetIds:
-        - Fn::ImportValue: !Sub "${BaseStackName}:MyFirstPrivateSubnet"
-        - !Ref SecondPrivateSubnet
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      ImageId: !Ref LatestAmiId
+      SubnetId:
+        Fn::ImportValue: !Sub "${BaseStackName}:MyFirstSubnet"
+      SecurityGroupIds:
+        - !Ref MongoDBSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
 
-  # 4. De daadwerkelijke Postgres Database
-  MyPostgresDB:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      Engine: postgres
-      DBInstanceClass: !Ref DatabaseClass
-      DBName: !Ref DatabaseName
-      MasterUsername: !Ref UserName
-      MasterUserPassword: !Ref Password
-      AllocatedStorage: 20
-      DBSubnetGroupName: !Ref MyDBSubnetGroup
-      VPCSecurityGroups:
-        - !Ref RDSSecurityGroup
-      PubliclyAccessible: false
-      MultiAZ: false
+          # Voeg de officiële MongoDB 7.0 repository toe voor Amazon Linux 2
+          cat > /etc/yum.repos.d/mongodb-org-7.0.repo << 'EOF'
+          [mongodb-org-7.0]
+          name=MongoDB Repository
+          baseurl=https://repo.mongodb.org/yum/amazon/2/mongodb-org/7.0/x86_64/
+          gpgcheck=1
+          enabled=1
+          gpgkey=https://www.mongodb.org/static/pgp/server-7.0.asc
+          EOF
+
+          # Installeer MongoDB
+          yum install -y mongodb-org
+
+          # Standaard bindt MongoDB alleen aan 127.0.0.1 (localhost).
+          # Vervang dit door 0.0.0.0 zodat de web app instance er bij kan.
+          sed -i 's/127.0.0.1/0.0.0.0/' /etc/mongod.conf
+
+          # Start MongoDB en zorg dat het automatisch opstart bij reboot
+          systemctl start mongod
+          systemctl enable mongod
+      Tags:
+        - Key: Name
+          Value: MongoDBInstance
 
 Outputs:
-  DBEndpointAddress:
-    Description: RDS Endpoint Address
-    Value: !GetAtt MyPostgresDB.Endpoint.Address
-  DBEndpointPort:
-    Description: RDS Endpoint Port
-    Value: !GetAtt MyPostgresDB.Endpoint.Port
+  MongoDBPrivateIP:
+    Description: Private IP of the MongoDB instance (gebruik dit in DB_URL)
+    Value: !GetAtt MongoDBInstance.PrivateIp
+    Export:
+      Name: !Sub "${AWS::StackName}:MongoDBPrivateIP"
+
+  MongoDBPublicIP:
+    Description: Public IP of the MongoDB instance (voor Robo 3T verbinding)
+    Value: !GetAtt MongoDBInstance.PublicIp
