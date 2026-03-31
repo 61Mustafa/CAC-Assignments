@@ -1,0 +1,194 @@
+Description: Base VPC (10.0.0.0/16) with public and private subnets in two availability zones.
+
+Parameters:
+  # VPCCIDR:
+  # What: CIDR range for the VPC.
+  # Why: A VPC must have an IP address range to define its network.
+  VPCCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC.
+    Type: String
+    Default: 10.0.0.0/16
+  
+  #============================
+  # AZ1
+  #============================
+
+  # AZ1PUBLICSUBNETCIDR:
+  # What: CIDR range for the public subnet in AZ1.
+  # Why: A subnet needs its own IP range inside the VPC to place resources (like EC2).
+  AZ1PUBLICSUBNETCIDR:
+    Description: CIDR for the public subnet in AZ1
+    Type: String
+    Default: 10.0.1.0/24
+
+  # AZ1PRIVATESUBNETCIDR:
+  # What: CIDR range for the private subnet in AZ1.
+  # Why: Private subnets are used for resources that should not be directly accessible from the internet.
+  AZ1PRIVATESUBNETCIDR:
+    Description: CIDR for the private subnet in AZ1
+    Type: String
+    Default: 10.0.51.0/24
+
+  #============================
+  # AZ2
+  #============================
+
+  # AZ2PUBLICSUBNETCIDR:
+  # What: CIDR range for the public subnet in AZ2.
+  # Why: A subnet needs its own IP range inside the VPC to place resources (like EC2).
+  AZ2PUBLICSUBNETCIDR:
+    Description: CIDR for the public subnet in AZ2
+    Type: String
+    Default: 10.0.2.0/24
+
+  # AZ2PRIVATESUBNETCIDR:
+  # What: CIDR range for the private subnet in AZ2.
+  # Why: Private subnets are used for resources that should not be directly accessible from the internet.
+  AZ2PRIVATESUBNETCIDR:
+    Description: CIDR for the private subnet in AZ2
+    Type: String
+    Default: 10.0.52.0/24
+
+Resources:
+  # MyFirstVPC:
+  # What: Creates the VPC with the CIDR from VPCCIDR.
+  # Why: The VPC is the network container for subnets, routing, and other network resources.
+  #      This is the foundation of your network infrastructure in AWS.
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCIDR
+      EnableDnsHostnames: true # Allows instances to have DNS hostnames
+      Tags:
+        - Key: Name
+          Value: VPC
+
+  #============================
+  # AZ1
+  #============================
+
+  # AZ1PUBLICSUBNET:
+  # What: Creates the first public subnet in Availability Zone 1 with the CIDR from PUBLICSUBNETCIDR.
+  # Why: EC2 instances must be placed in a subnet. This public subnet will host the first web server instance.
+  #      MapPublicIpOnLaunch ensures instances automatically get a public IP for internet access.
+  AZ1PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !Ref AZ1PUBLICSUBNETCIDR
+      MapPublicIpOnLaunch: true # Automatically assigns public IP to instances in this subnet
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs ''] # Selects the first AZ in the region
+      Tags:
+        - Key: Name
+          Value: PUBLIC-SUBNET-AZ1
+
+  # AZ1PrivateSubnet:
+  # What: Creates the first private subnet in Availability Zone 1.
+  # Why: Private subnets are used for resources that should not be directly accessible from the internet.
+  #      Useful for databases, application servers, or backend services that need NAT for outbound access.
+  AZ1PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !Ref AZ1PRIVATESUBNETCIDR
+      MapPublicIpOnLaunch: false # No public IP for instances in private subnets
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: PRIVATE-SUBNET-AZ1
+
+  #============================
+  # AZ2
+  #============================
+
+  # AZ2PUBLICSUBNET:
+  # What: Creates the first public subnet in Availability Zone 2 with the CIDR from PUBLICSUBNETCIDR.
+  AZ2PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !Ref AZ2PUBLICSUBNETCIDR
+      MapPublicIpOnLaunch: true # Automatically assigns public IP to instances in this subnet
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs ''] # Selects the first AZ in the region
+      Tags:
+        - Key: Name
+          Value: PUBLIC-SUBNET-AZ2
+
+  # AZ2PrivateSubnet:
+  # What: Creates the first private subnet in Availability Zone 2.
+  AZ2PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !Ref AZ2PRIVATESUBNETCIDR
+      MapPublicIpOnLaunch: false # No public IP for instances in private subnets
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: PRIVATE-SUBNET-AZ2
+
+
+  #============================
+  # Internet Gateway
+  #============================
+
+  # InternetGateway:
+  # What: Creates an Internet Gateway.
+  # Why: Needed to allow internet connectivity (via routing) for the VPC.
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: INTERNETGATEWAY
+
+  # InternetGatewayAttachment:
+  # What: Attaches the Internet Gateway to the VPC.
+  # Why: Without this attachment, the IGW is not connected to the VPC and internet routing will not work.
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # PublicRouteTable:
+  # What: Creates a route table in the VPC.
+  # Why: Route tables hold routes (like the default route to the internet gateway).
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: PUBLIC-ROUTE-TABLE
+
+  # MyDefaultRoute:
+  # What: Adds a default route (0.0.0.0/0) to the internet gateway.
+  # Why: Required so traffic to the internet can leave the subnet via the internet gateway.
+  MyDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway:
+
+  #============================
+  # Route Association
+  #============================
+
+  # PublicSubnetRouteTableAssociation:
+  # What: Associates the first public subnet with the public route table.
+  # Why: Without this association, the subnet would not use the route table, meaning instances would have no internet access.
+  AZ1PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AZ1PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  AZ2PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AZ2PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
