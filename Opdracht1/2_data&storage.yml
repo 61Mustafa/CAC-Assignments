@@ -75,6 +75,7 @@ Resources:
         - !Ref RDSSecurityGroup
       PubliclyAccessible: false
       MultiAZ: false # SQL Server Express ondersteunt geen MultiAZ in RDS
+      MonitoringInterval: 0
       Tags:
         - Key: Name
           Value: DATABASE

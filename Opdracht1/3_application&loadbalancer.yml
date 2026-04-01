@@ -119,17 +119,19 @@ Resources:
               git clone https://github.com/looking4ward/CloudShirt.git
               
               # 4. Database connectie instellen met de SED commando's van de docent
-              # We vervangen ${RDSENDPOINT} door de werkelijke url uit stack 2. Let op dat we ook de DBUser en DBPassword variabelen invullen!
+              # We vervangen ${!RDSENDPOINT} door de werkelijke url uit stack 2. Let op dat we ook de DBUser en DBPassword variabelen invullen!
               sed -i "s/Server.*CatalogDb;/Server=${DatabaseEndpoint},1433;User ID=${DBUser};Password=${DBPassword};Initial Catalog=Microsoft.eShopOnWeb.CatalogDb;/" /home/ec2-user/CloudShirt/src/Web/appsettings.json
               sed -i "s/Server.*Identity;/Server=${DatabaseEndpoint},1433;User ID=${DBUser};Password=${DBPassword};Initial Catalog=Microsoft.eShopOnWeb.Identity;/" /home/ec2-user/CloudShirt/src/Web/appsettings.json
 
               # 5. Publiceren (volgens hint docent)
+              export HOME=/home/ec2-user
+              export DOTNET_CLI_HOME=/home/ec2-user
               cd /home/ec2-user/CloudShirt/src/Web
               dotnet publish -c Release -o /home/ec2-user/release
               
               # 6. Opstarten vanuit de release folder en logs naar EFS sturen
               cd /home/ec2-user/release
-              sudo PORT=80 nohup dotnet Web.dll > /var/log/cloudshirt/webapp.log 2>&1 &
+              nohup dotnet Web.dll --urls http://0.0.0.0:80 > /var/log/cloudshirt/webapp.log 2>&1 &
             - EfsId:
                 Fn::ImportValue: !Sub "${StorageStackName}:FileSystemId"
               DatabaseEndpoint:
