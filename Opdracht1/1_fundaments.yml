@@ -77,7 +77,7 @@ Resources:
       CidrBlock: !Ref AZ1PUBLICSUBNETCIDR
       MapPublicIpOnLaunch: true # Automatically assigns public IP to instances in this subnet
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs, ''] # Selects the first AZ in the region
+      AvailabilityZone: !Select [0, !GetAZs ''] # Selects the first AZ in the region
       Tags:
         - Key: Name
           Value: PUBLIC-SUBNET-AZ1
@@ -128,9 +128,9 @@ Resources:
           Value: PRIVATE-SUBNET-AZ2
 
 
-  #============================
-  # Internet Gateway
-  #============================
+  #======================================
+  # Internet Gateway & Routing Tables
+  #======================================
 
   # InternetGateway:
   # What: Creates an Internet Gateway.
@@ -162,6 +162,17 @@ Resources:
         - Key: Name
           Value: PUBLIC-ROUTE-TABLE
 
+  # PrivateRouteTable:
+  # What: Een aparte routekaart voor je private subnets.
+  # Why: Je mag private subnets niet aan je publieke routekaart koppelen, want anders worden ze publiek. Ze hebben hun eigen, afgeschermde regels nodig.
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: PRIVATE-ROUTE-TABLE
+
   # MyDefaultRoute:
   # What: Adds a default route (0.0.0.0/0) to the internet gateway.
   # Why: Required so traffic to the internet can leave the subnet via the internet gateway.
@@ -169,7 +180,7 @@ Resources:
     Type: AWS::EC2::Route
     DependsOn: InternetGatewayAttachment
     Properties:
-      RouteTableId: !Ref
+      RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
@@ -192,4 +203,122 @@ Resources:
     Properties:
       SubnetId: !Ref AZ2PublicSubnet
       RouteTableId: !Ref PublicRouteTable
+
+  #============================
+  # NAT Gateway & Private Routing
+  #============================
+
+
+  # NatGatewayEIP:
+  # What: Een vast, publiek IP-adres (Elastic IP) in AWS.
+  # Why: Een NAT Gateway communiceert met het internet namens jouw private servers. Om dat te kunnen doen, heeft de gateway een betrouwbaar, vast IP-adres nodig.
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  # NatGateway:
+  # What: De NAT Gateway service van AWS.
+  # Why: Dit zorgt ervoor dat servers in je private subnets wél updates of code (zoals van GitHub) van het internet kunnen downloaden, zonder dat ze zelf direct bereikbaar zijn vanaf het internet (veiliger!).
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref AZ1PublicSubnet # De NAT Gateway moet zélf altijd in een publiek subnet staan!
+      Tags:
+        - Key: Name
+          Value: NAT-GATEWAY
+
+  # PrivateRouteToInternet:
+  # What: Een regel in de private routekaart die internetverkeer doorstuurt naar de NAT Gateway.
+  # Why: Zonder deze regel weten de instances in het private subnet niet hoe ze het internet op moeten. Nu gaat al het uitgaande verkeer (0.0.0.0/0) veilig via de NAT.
+  PrivateRouteToInternet:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+
+  # AZ1PrivateSubnetRouteTableAssociation:
+  # What: Koppelt het eerste private subnet aan de private routekaart.
+  # Why: Zorgt dat de servers in AZ1-Private de regels van de private routekaart (en dus de NAT Gateway) gebruiken.
+  AZ1PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AZ1PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+  # AZ2PrivateSubnetRouteTableAssociation:
+  # What: Koppelt het tweede private subnet aan de private routekaart.
+  # Why: Zorgt dat ook de servers in AZ2-Private op een veilige manier het internet op kunnen via de NAT.
+  AZ2PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AZ2PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+
+  #============================
+  # Security Groups
+  #============================
+
+  # ALBSecurityGroup:
+  # What: De virtuele firewall voor de Load Balancer.
+  # Why: De Load Balancer is de voordeur van je website. Deze firewall staat inkomend HTTP (poort 80) verkeer toe vanuit de hele wereld (0.0.0.0/0), zodat klanten je webshop kunnen bezoeken.
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP traffic from the internet to the Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: ALB-SECURITY-GROUP
+
+  # WebServerSecurityGroup:
+  # What: De virtuele firewall voor de webservers (EC2 instances).
+  # Why: Deze is extra veilig ingesteld. Hij accepteert webverkeer (poort 80) NIET zomaar van het hele internet, maar ALLÉÉN als het afkomstig is van de Load Balancer (ALBSecurityGroup). We openen ook poort 22 voor SSH zodat je als beheerder eventueel nog in kunt loggen.
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP strictly from ALB, and SSH access
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup # Super veilig: alleen verkeer via de ALB is toegestaan!
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0 # Pas dit in de praktijk eventueel aan naar je eigen IP voor extra veiligheid
+      Tags:
+        - Key: Name
+          Value: WEBSERVER-SECURITY-GROUP
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
