@@ -77,7 +77,7 @@ Resources:
       CidrBlock: !Ref AZ1PUBLICSUBNETCIDR
       MapPublicIpOnLaunch: true # Automatically assigns public IP to instances in this subnet
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs ''] # Selects the first AZ in the region
+      AvailabilityZone: !Select [0, !GetAZs, ''] # Selects the first AZ in the region
       Tags:
         - Key: Name
           Value: PUBLIC-SUBNET-AZ1
@@ -169,9 +169,9 @@ Resources:
     Type: AWS::EC2::Route
     DependsOn: InternetGatewayAttachment
     Properties:
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway:
+      GatewayId: !Ref InternetGateway
 
   #============================
   # Route Association
