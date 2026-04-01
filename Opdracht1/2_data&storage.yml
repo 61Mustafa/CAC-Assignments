@@ -27,7 +27,7 @@ Resources:
 
   # RDSSecurityGroup:
   # What: De virtuele firewall (Security Group) voor de PostgreSQL database.
-  # Why: Databases bevatten gevoelige (klant)data en mogen NOOIT direct aan het internet hangen. Deze firewall zorgt ervoor dat alleen EC2 instances (webservers) met de WebServerSecurityGroup verbinding mogen maken op database-poort 5432. Al het andere verkeer wordt keihard geweigerd.
+  # Why: Databases bevatten gevoelige (klant)data en mogen NOOIT direct aan het internet hangen. Deze firewall zorgt ervoor dat alleen EC2 instances (webservers) met de WebServerSecurityGroup verbinding mogen maken op database-poort 1433. Al het andere verkeer wordt keihard geweigerd.
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -36,8 +36,8 @@ Resources:
         Fn::ImportValue: !Sub "${BaseStackName}:VPC"
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
+          FromPort: 1433
+          ToPort: 1433
           SourceSecurityGroupId:
             Fn::ImportValue: !Sub "${BaseStackName}:WebServerSecurityGroup"
       Tags:
@@ -109,7 +109,7 @@ Resources:
     Type: AWS::EFS::FileSystem
     Properties:
       Encrypted: true
-      Tags:
+      FileSystemTags:
         - Key: Name
           Value: CLOUDSHIRT-SHARED-LOGS
 
