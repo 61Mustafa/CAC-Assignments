@@ -1,0 +1,72 @@
+Description: Dit CloudFormation bestand maakt de Auto Scaling Group en de Scheduled Actions (tijdschema's) aan voor REQ-02.
+
+Parameters:
+  BaseStackName:
+    Description: Name of the foundational network stack
+    Type: String
+    Default: MyFundamentStack # Zorg dat deze naam klopt bij het deployen
+
+  AppStackName:
+    Description: Name of the application stack (Load Balancer & Launch Template)
+    Type: String
+    Default: MyAppStack # Verzin een goede naam voor je 3e stack bij het deployen en vul die hier in!
+
+Resources:
+  #======================================
+  # Auto Scaling Group
+  #======================================
+
+  # WebAppAutoScalingGroup:
+  # What: De "motor" die bepaalt hoeveel EC2 webservers er draaien.
+  # Why: Zorgt voor veerkracht en beschikbaarheid. Als er een server crasht, maakt deze groep automatisch een nieuwe aan op basis van het Launch Template uit bestand 3. Hij plaatst de servers in onze veilige Private Subnets.
+  WebAppAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: ASG
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub "${BaseStackName}:AZ1PrivateSubnet"
+        - Fn::ImportValue: !Sub "${BaseStackName}:AZ2PrivateSubnet"
+      LaunchTemplate:
+        LaunchTemplateId:
+          Fn::ImportValue: !Sub "${AppStackName}:LaunchTemplateId"
+        Version:
+          Fn::ImportValue: !Sub "${AppStackName}:LaunchTemplateVersion"
+      MinSize: '1' # Standaard draait er minimaal 1 server
+      MaxSize: '3' # Maximaal mogen er 3 tegelijk draaien
+      DesiredCapacity: '1' # We willen er standaard 1
+      TargetGroupARNs:
+        - Fn::ImportValue: !Sub "${AppStackName}:TargetGroupArn" # Koppel de nieuwe servers direct aan de Load Balancer Target Group!
+      Tags:
+        - Key: Name
+          Value: CLOUDSHIRT-ASG-INSTANCE
+          PropagateAtLaunch: true # Zorgt ervoor dat elke EC2 instance deze tag krijgt
+
+  #======================================
+  # Scheduled Actions
+  #======================================
+
+  # ScaleUpAction:
+  # What: Een geplande actie die de gewenste capaciteit (DesiredCapacity) verhoogt naar 2 servers.
+  # Why: Volgens REQ-02 wordt er een piek verwacht vanaf 18:00 EST. De cron expressie "0 23 * * *" betekent elke dag om 23:00 UTC (wat overeenkomt met 18:00 EST).
+  ScaleUpAction:
+    Type: AWS::AutoScaling::ScheduledAction
+    Properties:
+      AutoScalingGroupName: !Ref WebAppAutoScalingGroup
+      ScheduledActionName: ScaleUpForEveningTraffic
+      Recurrence: "0 23 * * *" # Elke dag om 23:00 UTC (18:00 EST)
+      MinSize: 2
+      DesiredCapacity: 2
+      MaxSize: 3
+
+  # ScaleDownAction:
+  # What: Een geplande actie die de gewenste capaciteit (DesiredCapacity) weer terugzet naar 1 server.
+  # Why: Om kosten te besparen als de verwachte drukte voorbij is. "0 1 * * *" betekent elke dag om 01:00 UTC (wat overeenkomt met 20:00 EST de avond ervoor).
+  ScaleDownAction:
+    Type: AWS::AutoScaling::ScheduledAction
+    Properties:
+      AutoScalingGroupName: !Ref WebAppAutoScalingGroup
+      ScheduledActionName: ScaleDownAfterEveningTraffic
+      Recurrence: "0 1 * * *" # Elke dag om 01:00 UTC (20:00 EST)
+      MinSize: 1
+      DesiredCapacity: 1
+      MaxSize: 3
