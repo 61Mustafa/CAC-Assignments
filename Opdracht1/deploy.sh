@@ -11,8 +11,7 @@ echo "🚀 Start met de uitrol van de CloudShirt Infrastructuur..."
 echo "📦 1/4 Deploying Fundament Stack..."
 aws cloudformation deploy \
   --stack-name MyFundamentStack \
-  --template-file 1_fundaments.yml \
-  --capabilities CAPABILITY_NAMED_IAM
+  --template-file 1_fundaments.yml
 
 # ==========================================
 # 2. Data & Storage Stack (RDS & EFS)
@@ -21,8 +20,7 @@ echo "📦 2/4 Deploying Data & Storage Stack (Dit kan ~10-15 min duren ivm de D
 aws cloudformation deploy \
   --stack-name MyStorageStack \
   --template-file 2_data\&storage.yml \
-  --parameter-overrides BaseStackName=MyFundamentStack \
-  --capabilities CAPABILITY_NAMED_IAM
+  --parameter-overrides BaseStackName=MyFundamentStack
 
 # ==========================================
 # 3. Application Stack (Load Balancer & Launch Template)
@@ -31,8 +29,7 @@ echo "📦 3/4 Deploying Application Stack..."
 aws cloudformation deploy \
   --stack-name MyAppStack \
   --template-file 3_application\&loadbalancer.yml \
-  --parameter-overrides BaseStackName=MyFundamentStack StorageStackName=MyStorageStack \
-  --capabilities CAPABILITY_NAMED_IAM
+  --parameter-overrides BaseStackName=MyFundamentStack StorageStackName=MyStorageStack
 
 # ==========================================
 # 4. Auto Scaling Stack (ASG & Scheduled Actions)
@@ -41,8 +38,7 @@ echo "📦 4/4 Deploying Auto Scaling Stack..."
 aws cloudformation deploy \
   --stack-name MyASGStack \
   --template-file 4_auto_scaling.yml \
-  --parameter-overrides BaseStackName=MyFundamentStack AppStackName=MyAppStack \
-  --capabilities CAPABILITY_NAMED_IAM
+  --parameter-overrides BaseStackName=MyFundamentStack AppStackName=MyAppStack
 
 echo "✅ Alle stacks zijn succesvol uitgerold!"
 

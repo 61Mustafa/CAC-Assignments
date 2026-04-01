@@ -1,4 +1,4 @@
-Description: Dit CloudFormation bestand maakt een PostgreSQL database en een EFS netwerkschijf aan in de private subnets.
+Description: Dit CloudFormation bestand maakt een MS SQL SERVER database en een EFS netwerkschijf aan in de private subnets.
 
 Parameters:
   BaseStackName:
@@ -31,7 +31,7 @@ Resources:
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow PostgreSQL traffic from Web Servers only
+      GroupDescription: Allow MS SQL SERVER traffic from Web Servers only
       VpcId:
         Fn::ImportValue: !Sub "${BaseStackName}:VPC"
       SecurityGroupIngress:
@@ -59,7 +59,7 @@ Resources:
           Value: DB-SUBNET-GROUP
 
   # RDSInstance:
-  # What: De daadwerkelijke database server (PostgreSQL 15.4).
+  # What: De daadwerkelijke database server (MS SQL SERVERQL).
   # Why: De .NET applicatie (CloudShirt) is een webwinkel en heeft een persistente database nodig om de bestellingen en orders op te slaan (REQ-04). Door MultiAZ op 'true' te zetten, zorgt AWS automatisch voor een synchrone backup in de tweede Availability Zone, wat zorgt voor hoge beschikbaarheid bij storingen.
   RDSInstance:
     Type: AWS::RDS::DBInstance

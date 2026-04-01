@@ -134,7 +134,7 @@ Resources:
                 Fn::ImportValue: !Sub "${StorageStackName}:FileSystemId"
               DatabaseEndpoint:
                 Fn::ImportValue: !Sub "${StorageStackName}:DatabaseEndpoint"
-              DBUser: admin # Vul hier dezelfde user in als in stack 2
+              DBUser: postgresadmin # Vul hier dezelfde user in als in stack 2
               DBPassword: Komjenietin123! # Vul hier hetzelfde wachtwoord in als in stack 2
 
         TagSpecifications:
