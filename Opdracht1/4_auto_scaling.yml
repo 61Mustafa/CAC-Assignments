@@ -36,7 +36,7 @@ Resources:
       Tags:
         - Key: Name
           Value: CLOUDSHIRT-ASG-INSTANCE
-          PropagateAtLaunch: true# Zorgt ervoor dat elke EC2 instance deze tag krijgt
+          PropagateAtLaunch: true # Zorgt ervoor dat elke EC2 instance deze tag krijgt
   #======================================
   # Scheduled Actions
   #======================================
