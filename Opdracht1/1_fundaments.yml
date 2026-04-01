@@ -77,7 +77,7 @@ Resources:
       CidrBlock: !Ref AZ1PUBLICSUBNETCIDR
       MapPublicIpOnLaunch: true # Automatically assigns public IP to instances in this subnet
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs ''] # Selects the first AZ in the region
+      AvailabilityZone: !Select [0, !GetAZs ''] # Selects the first AZ in the region (us-east-1a)
       Tags:
         - Key: Name
           Value: PUBLIC-SUBNET-AZ1
@@ -92,7 +92,7 @@ Resources:
       CidrBlock: !Ref AZ1PRIVATESUBNETCIDR
       MapPublicIpOnLaunch: false # No public IP for instances in private subnets
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs ''] # (us-east-1a)
       Tags:
         - Key: Name
           Value: PRIVATE-SUBNET-AZ1
@@ -109,7 +109,7 @@ Resources:
       CidrBlock: !Ref AZ2PUBLICSUBNETCIDR
       MapPublicIpOnLaunch: true # Automatically assigns public IP to instances in this subnet
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !GetAZs ''] # Selects the first AZ in the region
+      AvailabilityZone: !Select [1, !GetAZs ''] # Selects the first AZ in the region (us-east-1b)
       Tags:
         - Key: Name
           Value: PUBLIC-SUBNET-AZ2
@@ -122,7 +122,7 @@ Resources:
       CidrBlock: !Ref AZ2PRIVATESUBNETCIDR
       MapPublicIpOnLaunch: false # No public IP for instances in private subnets
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs ''] # (us-east-1b)
       Tags:
         - Key: Name
           Value: PRIVATE-SUBNET-AZ2
@@ -301,10 +301,33 @@ Resources:
         - Key: Name
           Value: WEBSERVER-SECURITY-GROUP
 
+#============================
+# Outputs
+#============================
+Outputs:
+  VPCRef:
+    Description: Reference to the VPC
+    Value: !Ref VPC
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "VPC"]]
 
+  AZ1PrivateSubnetRef:
+    Description: Reference to the AZ1 Private Subnet
+    Value: !Ref AZ1PrivateSubnet
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "AZ1PrivateSubnet"]]
 
+  AZ2PrivateSubnetRef:
+    Description: Reference to the AZ2 Private Subnet
+    Value: !Ref AZ2PrivateSubnet
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "AZ2PrivateSubnet"]]
 
-
+  WebServerSecurityGroupRef:
+    Description: Reference to the Web Server Security Group
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "WebServerSecurityGroup"]]
 
 
 

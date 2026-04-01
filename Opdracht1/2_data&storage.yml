@@ -1,0 +1,148 @@
+Description: Dit CloudFormation bestand maakt een PostgreSQL database en een EFS netwerkschijf aan in de private subnets.
+
+Parameters:
+  BaseStackName:
+    Description: Name of the foundational network stack to import values from
+    Type: String
+    Default: MyFundamentStack # Zorg dat je de fundament-stack echt zo noemt bij het uitrollen
+
+  #============================
+  # Database Parameters
+  #============================
+  DBUser:
+    Description: Master username for the database
+    Type: String
+    Default: postgresadmin
+
+  DBPassword:
+    Description: Master password for the database
+    Type: String
+    NoEcho: true
+    Default: Komjenietin123!
+
+Resources:
+  #======================================
+  # Database (RDS)
+  #======================================
+
+  # RDSSecurityGroup:
+  # What: De virtuele firewall (Security Group) voor de PostgreSQL database.
+  # Why: Databases bevatten gevoelige (klant)data en mogen NOOIT direct aan het internet hangen. Deze firewall zorgt ervoor dat alleen EC2 instances (webservers) met de WebServerSecurityGroup verbinding mogen maken op database-poort 5432. Al het andere verkeer wordt keihard geweigerd.
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow PostgreSQL traffic from Web Servers only
+      VpcId:
+        Fn::ImportValue: !Sub "${BaseStackName}:VPC"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId:
+            Fn::ImportValue: !Sub "${BaseStackName}:WebServerSecurityGroup"
+      Tags:
+        - Key: Name
+          Value: RDS-SECURITY-GROUP
+
+  # DBSubnetGroup:
+  # What: Een logische groepering van subnets speciaal voor de RDS Database.
+  # Why: AWS vereist dat een Multi-AZ database is verspreid over minimaal twee subnets in verschillende Availability Zones. Door hier bewust onze Private Subnets te selecteren, forceren we AWS om de database in de afgeschermde laag van het netwerk te bouwen.
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets for the RDS database
+      SubnetIds:
+        - Fn::ImportValue: !Sub "${BaseStackName}:AZ1PrivateSubnet"
+        - Fn::ImportValue: !Sub "${BaseStackName}:AZ2PrivateSubnet"
+      Tags:
+        - Key: Name
+          Value: DB-SUBNET-GROUP
+
+  # RDSInstance:
+  # What: De daadwerkelijke database server (PostgreSQL 15.4).
+  # Why: De .NET applicatie (CloudShirt) is een webwinkel en heeft een persistente database nodig om de bestellingen en orders op te slaan (REQ-04). Door MultiAZ op 'true' te zetten, zorgt AWS automatisch voor een synchrone backup in de tweede Availability Zone, wat zorgt voor hoge beschikbaarheid bij storingen.
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: postgres
+      EngineVersion: "15.4"
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      PubliclyAccessible: false # Beveiliging: Géén openbaar IP-adres
+      MultiAZ: true # High Availability: Automatische stand-by in de 2e AZ
+      Tags:
+        - Key: Name
+          Value: DATABASE
+
+  #======================================
+  # Elastic File System (EFS)
+  #======================================
+
+  # EFSSecurityGroup:
+  # What: De firewall (Security Group) voor de gedeelde netwerkschijf (EFS).
+  # Why: Zorgt ervoor dat alleen onze EC2 webservers (via het Network File System protocol op poort 2049) bij deze gedeelde schijf kunnen om hun logbestanden weg te schrijven.
+  EFSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow NFS access from Web Servers
+      VpcId:
+        Fn::ImportValue: !Sub "${BaseStackName}:VPC"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId:
+            Fn::ImportValue: !Sub "${BaseStackName}:WebServerSecurityGroup"
+      Tags:
+        - Key: Name
+          Value: EFS-SECURITY-GROUP
+
+  # MySharedDrive:
+  # What: De virtuele en elastische harde schijf (EFS) zelf.
+  # Why: Auto Scaling gooit EC2-servers regelmatig weg. Om te voorkomen dat web-logs verdwijnen als een server wordt verwijderd, gebruiken we deze EFS als een centrale opslagplek (REQ-03) waar álle servers hun logs tegelijkertijd naar wegschrijven.
+  MySharedDrive:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      Tags:
+        - Key: Name
+          Value: CLOUDSHIRT-SHARED-LOGS
+
+  # MountTargetAZ1:
+  # What: Een netwerkaansluitpunt (Mount Target) in het eerste private subnet (AZ1).
+  # Why: EFS is een regionale service. Om de instances in AZ1 toegang te geven tot de EFS, moet de EFS fysiek een IP-adres (aansluitpunt) krijgen in het subnet van die instances.
+  MountTargetAZ1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref MySharedDrive
+      SubnetId:
+        Fn::ImportValue: !Sub "${BaseStackName}:AZ1PrivateSubnet"
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+  # MountTargetAZ2:
+  # What: Een netwerkaansluitpunt (Mount Target) in het tweede private subnet (AZ2).
+  # Why: De Load Balancer (REQ-01) en Auto Scaling verdelen verkeer en instances over twee AZ's. Daarom moet de EFS schijf ook vanuit het tweede subnet bereikbaar zijn.
+  MountTargetAZ2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref MySharedDrive
+      SubnetId:
+        Fn::ImportValue: !Sub "${BaseStackName}:AZ2PrivateSubnet"
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+Outputs:
+  # FileSystemIdRef:
+  # What: Exporteert de ID van de gemaakte EFS schijf.
+  # Why: In Fase 3 (Compute) moeten we in het opstartscript (UserData) van de webservers weten wélke EFS-schijf we precies moeten "mounten". Door dit ID te exporteren, kunnen we het in het volgende CloudFormation template importeren.
+  FileSystemIdRef:
+    Description: Reference to the shared EFS drive ID
+    Value: !Ref MySharedDrive
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "FileSystemId"]]
