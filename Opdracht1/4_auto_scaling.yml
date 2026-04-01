@@ -49,6 +49,7 @@ Resources:
     Properties:
       AutoScalingGroupName: !Ref WebAppAutoScalingGroup
       ScheduledActionName: ScaleUpForEveningTraffic
+      StartTime: "2026-04-01T16:35:00Z" # Eenmalig vandaag om 18:35 NL tijd zodat de actie direct wordt uitgevoerd
       Recurrence: "0 16 * * *" # Elke dag om 16:00 UTC (18:00 Nederlandse tijd)
       MinSize: 3 # Tijdens de piek is het minimum 3
       DesiredCapacity: 3 # We forceren hem naar 3 servers
