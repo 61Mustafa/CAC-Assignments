@@ -64,17 +64,17 @@ Resources:
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
-      Engine: postgres
-      EngineVersion: "15.4"
-      DBInstanceClass: db.t3.micro
+      Engine: sqlserver-ex
+      DBInstanceClass: db.t3.small # AANGEPAST naar t3.small
+      LicenseModel: license-included # TOEGEVOEGD
       AllocatedStorage: 20
       MasterUsername: !Ref DBUser
       MasterUserPassword: !Ref DBPassword
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
-      PubliclyAccessible: false # Beveiliging: Géén openbaar IP-adres
-      MultiAZ: true # High Availability: Automatische stand-by in de 2e AZ
+      PubliclyAccessible: false
+      MultiAZ: false # SQL Server Express ondersteunt geen MultiAZ in RDS
       Tags:
         - Key: Name
           Value: DATABASE
@@ -146,3 +146,9 @@ Outputs:
     Value: !Ref MySharedDrive
     Export:
       Name: !Join [":", [!Ref "AWS::StackName", "FileSystemId"]]
+
+  DatabaseEndpointRef:
+    Description: Connection endpoint for the RDS Database
+    Value: !GetAtt RDSInstance.Endpoint.Address
+    Export:
+      Name: !Join [ ":", [ !Ref "AWS::StackName", "DatabaseEndpoint" ] ]

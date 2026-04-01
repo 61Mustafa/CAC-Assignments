@@ -329,7 +329,23 @@ Outputs:
     Export:
       Name: !Join [":", [!Ref "AWS::StackName", "WebServerSecurityGroup"]]
 
+  AZ1PublicSubnetRef:
+    Description: Reference to the AZ1 Public Subnet
+    Value: !Ref AZ1PublicSubnet
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "AZ1PublicSubnet"]]
 
+  AZ2PublicSubnetRef:
+    Description: Reference to the AZ2 Public Subnet
+    Value: !Ref AZ2PublicSubnet
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "AZ2PublicSubnet"]]
+
+  ALBSecurityGroupRef:
+    Description: Reference to the ALB Security Group
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "ALBSecurityGroup"]]
 
 
 
