@@ -16,9 +16,6 @@ Resources:
   # Auto Scaling Group
   #======================================
 
-  # WebAppAutoScalingGroup:
-  # What: De "motor" die bepaalt hoeveel EC2 webservers er draaien.
-  # Why: Zorgt voor veerkracht en beschikbaarheid. Als er een server crasht, maakt deze groep automatisch een nieuwe aan op basis van het Launch Template uit bestand 3. Hij plaatst de servers in onze veilige Private Subnets.
   WebAppAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -31,15 +28,15 @@ Resources:
           Fn::ImportValue: !Sub "${AppStackName}:LaunchTemplateId"
         Version:
           Fn::ImportValue: !Sub "${AppStackName}:LaunchTemplateVersion"
-      MinSize: '1' # Standaard draait er minimaal 1 server
-      MaxSize: '3' # Maximaal mogen er 3 tegelijk draaien
-      DesiredCapacity: '1' # We willen er standaard 1
+      MinSize: '2'
+      MaxSize: '5'
+      DesiredCapacity: '2'
       TargetGroupARNs:
-        - Fn::ImportValue: !Sub "${AppStackName}:TargetGroupArn" # Koppel de nieuwe servers direct aan de Load Balancer Target Group!
+        - Fn::ImportValue: !Sub "${AppStackName}:TargetGroupArn"
       Tags:
         - Key: Name
           Value: CLOUDSHIRT-ASG-INSTANCE
-          PropagateAtLaunch: true # Zorgt ervoor dat elke EC2 instance deze tag krijgt
+          PropagateAtLaunch: true# Zorgt ervoor dat elke EC2 instance deze tag krijgt
   #======================================
   # Scheduled Actions
   #======================================
