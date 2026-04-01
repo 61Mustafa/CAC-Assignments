@@ -1,0 +1,53 @@
+#!/bin/bash
+
+# Stop het script direct als er een commando faalt
+set -e
+
+echo "🚀 Start met de uitrol van de CloudShirt Infrastructuur..."
+
+# ==========================================
+# 1. Fundament Stack (Netwerk & Security)
+# ==========================================
+echo "📦 1/4 Deploying Fundament Stack..."
+aws cloudformation deploy \
+  --stack-name MyFundamentStack \
+  --template-file 1_fundaments.yml \
+  --capabilities CAPABILITY_NAMED_IAM
+
+# ==========================================
+# 2. Data & Storage Stack (RDS & EFS)
+# ==========================================
+echo "📦 2/4 Deploying Data & Storage Stack (Dit kan ~10-15 min duren ivm de Database)..."
+aws cloudformation deploy \
+  --stack-name MyStorageStack \
+  --template-file 2_data\&storage.yml \
+  --parameter-overrides BaseStackName=MyFundamentStack \
+  --capabilities CAPABILITY_NAMED_IAM
+
+# ==========================================
+# 3. Application Stack (Load Balancer & Launch Template)
+# ==========================================
+echo "📦 3/4 Deploying Application Stack..."
+aws cloudformation deploy \
+  --stack-name MyAppStack \
+  --template-file 3_application\&loadbalancer.yml \
+  --parameter-overrides BaseStackName=MyFundamentStack StorageStackName=MyStorageStack \
+  --capabilities CAPABILITY_NAMED_IAM
+
+# ==========================================
+# 4. Auto Scaling Stack (ASG & Scheduled Actions)
+# ==========================================
+echo "📦 4/4 Deploying Auto Scaling Stack..."
+aws cloudformation deploy \
+  --stack-name MyASGStack \
+  --template-file 4_auto_scaling.yml \
+  --parameter-overrides BaseStackName=MyFundamentStack AppStackName=MyAppStack \
+  --capabilities CAPABILITY_NAMED_IAM
+
+echo "✅ Alle stacks zijn succesvol uitgerold!"
+
+# Haal de DNS naam (URL) van de Load Balancer op om direct te kunnen testen
+ALB_URL=$(aws cloudformation describe-stacks --stack-name MyAppStack --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDnsName'].OutputValue" --output text)
+
+echo "🌐 Je applicatie is (zodra de server is opgestart) bereikbaar op:"
+echo "http://$ALB_URL"
