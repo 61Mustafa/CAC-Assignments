@@ -40,33 +40,32 @@ Resources:
         - Key: Name
           Value: CLOUDSHIRT-ASG-INSTANCE
           PropagateAtLaunch: true # Zorgt ervoor dat elke EC2 instance deze tag krijgt
-
   #======================================
   # Scheduled Actions
   #======================================
 
   # ScaleUpAction:
-  # What: Een geplande actie die de gewenste capaciteit (DesiredCapacity) verhoogt naar 2 servers.
-  # Why: Volgens REQ-02 wordt er een piek verwacht vanaf 18:00 EST. De cron expressie "0 23 * * *" betekent elke dag om 23:00 UTC (wat overeenkomt met 18:00 EST).
+  # What: Een geplande actie die de gewenste capaciteit (DesiredCapacity) verhoogt naar 3 servers.
+  # Why: Tussen 18:00 en 20:00 (NL tijd) verwachten we drukte. 18:00 NL tijd (zomertijd) is 16:00 in UTC tijd.
   ScaleUpAction:
     Type: AWS::AutoScaling::ScheduledAction
     Properties:
       AutoScalingGroupName: !Ref WebAppAutoScalingGroup
       ScheduledActionName: ScaleUpForEveningTraffic
-      Recurrence: "0 23 * * *" # Elke dag om 23:00 UTC (18:00 EST)
-      MinSize: 2
-      DesiredCapacity: 2
-      MaxSize: 3
+      Recurrence: "0 16 * * *" # Elke dag om 16:00 UTC (18:00 Nederlandse tijd)
+      MinSize: 3 # Tijdens de piek is het minimum 3
+      DesiredCapacity: 3 # We forceren hem naar 3 servers
+      MaxSize: 5 # Maximum blijft 5
 
   # ScaleDownAction:
-  # What: Een geplande actie die de gewenste capaciteit (DesiredCapacity) weer terugzet naar 1 server.
-  # Why: Om kosten te besparen als de verwachte drukte voorbij is. "0 1 * * *" betekent elke dag om 01:00 UTC (wat overeenkomt met 20:00 EST de avond ervoor).
+  # What: Een geplande actie die de gewenste capaciteit (DesiredCapacity) weer terugzet naar 2 servers.
+  # Why: Om 20:00 (NL tijd) is de drukte voorbij en schalen we af om kosten te besparen. 20:00 NL tijd is 18:00 UTC tijd.
   ScaleDownAction:
     Type: AWS::AutoScaling::ScheduledAction
     Properties:
       AutoScalingGroupName: !Ref WebAppAutoScalingGroup
       ScheduledActionName: ScaleDownAfterEveningTraffic
-      Recurrence: "0 1 * * *" # Elke dag om 01:00 UTC (20:00 EST)
-      MinSize: 1
-      DesiredCapacity: 1
-      MaxSize: 3
+      Recurrence: "0 18 * * *" # Elke dag om 18:00 UTC (20:00 Nederlandse tijd)
+      MinSize: 2 # Na de piek is het minimum weer 2
+      DesiredCapacity: 2 # We forceren hem terug naar 2 servers
+      MaxSize: 5 # Maximum blijft 5
