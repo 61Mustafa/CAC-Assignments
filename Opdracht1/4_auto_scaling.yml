@@ -63,7 +63,7 @@ Resources:
     Properties:
       AutoScalingGroupName: !Ref WebAppAutoScalingGroup
       ScheduledActionName: ScaleDownAfterEveningTraffic
-      StartTime: "2026-04-01T17:20:00Z" # Eenmalig voor vandaag om 18:35 NL tijd zodat de actie direct wordt uitgevoerd
+      StartTime: "2026-04-01T17:20:00Z" # Eenmalig voor vandaag om 19:20 NL tijd zodat de actie direct wordt uitgevoerd
       Recurrence: "0 18 * * *" # Elke dag om 18:00 UTC (20:00 Nederlandse tijd)
       MinSize: 1 # Na de piek is het minimum weer 2
       DesiredCapacity: 1 # We forceren hem terug naar 2 servers
