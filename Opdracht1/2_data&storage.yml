@@ -12,13 +12,13 @@ Parameters:
   DBUser:
     Description: Master username for the database
     Type: String
-    Default: postgresadmin
+    Default: adminAWS
 
   DBPassword:
     Description: Master password for the database
     Type: String
     NoEcho: true
-    Default: Komjenietin123!
+    Default: Komjenietin123
 
 Resources:
   #======================================
