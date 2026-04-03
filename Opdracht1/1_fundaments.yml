@@ -1,140 +1,114 @@
-Description: Base VPC (10.0.0.0/16) with public and private subnets in two availability zones.
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Base VPC (10.0.0.0/16) met een public en private subnet in twee availability zones.
 
 Parameters:
-  # VPCCIDR:
-  # What: CIDR range for the VPC.
-  # Why: A VPC must have an IP address range to define its network.
+  #============================
+  # CIDR Blocks
+  #============================
   VPCCIDR:
-    Description: Please enter the IP range (CIDR notation) for this VPC.
+    Description: IP reeks (CIDR) voor mijn vpc.
     Type: String
     Default: 10.0.0.0/16
   
   #============================
-  # AZ1
+  # Availability Zone 1 (AZ1)
   #============================
 
-  # AZ1PUBLICSUBNETCIDR:
-  # What: CIDR range for the public subnet in AZ1.
-  # Why: A subnet needs its own IP range inside the VPC to place resources (like EC2).
   AZ1PUBLICSUBNETCIDR:
-    Description: CIDR for the public subnet in AZ1
+    Description: IP-reeks (CIDR) voor het publieke subnet in AZ1
     Type: String
     Default: 10.0.1.0/24
 
-  # AZ1PRIVATESUBNETCIDR:
-  # What: CIDR range for the private subnet in AZ1.
-  # Why: Private subnets are used for resources that should not be directly accessible from the internet.
   AZ1PRIVATESUBNETCIDR:
-    Description: CIDR for the private subnet in AZ1
+    Description: IP-reeks (CIDR) voor het private subnet in AZ1
     Type: String
     Default: 10.0.51.0/24
 
   #============================
-  # AZ2
+  # Availability Zone 2 (AZ2)
   #============================
 
-  # AZ2PUBLICSUBNETCIDR:
-  # What: CIDR range for the public subnet in AZ2.
-  # Why: A subnet needs its own IP range inside the VPC to place resources (like EC2).
   AZ2PUBLICSUBNETCIDR:
-    Description: CIDR for the public subnet in AZ2
+    Description: IP-reeks (CIDR) voor het publieke subnet in AZ2
     Type: String
     Default: 10.0.2.0/24
 
-  # AZ2PRIVATESUBNETCIDR:
-  # What: CIDR range for the private subnet in AZ2.
-  # Why: Private subnets are used for resources that should not be directly accessible from the internet.
   AZ2PRIVATESUBNETCIDR:
-    Description: CIDR for the private subnet in AZ2
+    Description: IP-reeks (CIDR) voor het private subnet in AZ2
     Type: String
     Default: 10.0.52.0/24
 
 Resources:
-  # MyFirstVPC:
-  # What: Creates the VPC with the CIDR from VPCCIDR.
-  # Why: The VPC is the network container for subnets, routing, and other network resources.
-  #      This is the foundation of your network infrastructure in AWS.
+  #============================
+  # VPC
+  #============================
+
   VPC:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: !Ref VPCCIDR
-      EnableDnsHostnames: true # Allows instances to have DNS hostnames
+      EnableDnsHostnames: true # Zorgt ervoor dat je servers gebruiksvriendelijke DNS namen krijgen in plaats van alleen onthoudbare IP-adressen.
       Tags:
         - Key: Name
           Value: VPC
 
   #============================
-  # AZ1
+  # Subnets in AZ1
   #============================
 
-  # AZ1PUBLICSUBNET:
-  # What: Creates the first public subnet in Availability Zone 1 with the CIDR from PUBLICSUBNETCIDR.
-  # Why: EC2 instances must be placed in a subnet. This public subnet will host the first web server instance.
-  #      MapPublicIpOnLaunch ensures instances automatically get a public IP for internet access.
   AZ1PublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       CidrBlock: !Ref AZ1PUBLICSUBNETCIDR
-      MapPublicIpOnLaunch: true # Automatically assigns public IP to instances in this subnet
+      MapPublicIpOnLaunch: true # Deel automatisch publieke IP adressen uit aan nieuwe servers.
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs ''] # Selects the first AZ in the region (us-east-1a)
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
           Value: PUBLIC-SUBNET-AZ1
 
-  # AZ1PrivateSubnet:
-  # What: Creates the first private subnet in Availability Zone 1.
-  # Why: Private subnets are used for resources that should not be directly accessible from the internet.
-  #      Useful for databases, application servers, or backend services that need NAT for outbound access.
   AZ1PrivateSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       CidrBlock: !Ref AZ1PRIVATESUBNETCIDR
-      MapPublicIpOnLaunch: false # No public IP for instances in private subnets
+      MapPublicIpOnLaunch: false # Géén publieke IP adressen uitdelen voor private instances.
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs ''] # (us-east-1a)
+      AvailabilityZone: !Select [0, !GetAZs ''] # Wederom de eerste zone.
       Tags:
         - Key: Name
           Value: PRIVATE-SUBNET-AZ1
 
   #============================
-  # AZ2
+  # Subnets in Zone 2 (AZ2)
   #============================
 
-  # AZ2PUBLICSUBNET:
-  # What: Creates the first public subnet in Availability Zone 2 with the CIDR from PUBLICSUBNETCIDR.
   AZ2PublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       CidrBlock: !Ref AZ2PUBLICSUBNETCIDR
-      MapPublicIpOnLaunch: true # Automatically assigns public IP to instances in this subnet
+      MapPublicIpOnLaunch: true
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !GetAZs ''] # Selects the first AZ in the region (us-east-1b)
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
           Value: PUBLIC-SUBNET-AZ2
 
-  # AZ2PrivateSubnet:
-  # What: Creates the first private subnet in Availability Zone 2.
   AZ2PrivateSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       CidrBlock: !Ref AZ2PRIVATESUBNETCIDR
-      MapPublicIpOnLaunch: false # No public IP for instances in private subnets
+      MapPublicIpOnLaunch: false
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !GetAZs ''] # (us-east-1b)
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
           Value: PRIVATE-SUBNET-AZ2
 
 
   #======================================
-  # Internet Gateway & Routing Tables
+  # Internet Gateway & Route Tables
   #======================================
 
-  # InternetGateway:
-  # What: Creates an Internet Gateway.
-  # Why: Needed to allow internet connectivity (via routing) for the VPC.
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -142,18 +116,12 @@ Resources:
         - Key: Name
           Value: INTERNETGATEWAY
 
-  # InternetGatewayAttachment:
-  # What: Attaches the Internet Gateway to the VPC.
-  # Why: Without this attachment, the IGW is not connected to the VPC and internet routing will not work.
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
-  # PublicRouteTable:
-  # What: Creates a route table in the VPC.
-  # Why: Route tables hold routes (like the default route to the internet gateway).
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -162,9 +130,6 @@ Resources:
         - Key: Name
           Value: PUBLIC-ROUTE-TABLE
 
-  # PrivateRouteTable:
-  # What: Een aparte routekaart voor je private subnets.
-  # Why: Je mag private subnets niet aan je publieke routekaart koppelen, want anders worden ze publiek. Ze hebben hun eigen, afgeschermde regels nodig.
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -173,9 +138,6 @@ Resources:
         - Key: Name
           Value: PRIVATE-ROUTE-TABLE
 
-  # MyDefaultRoute:
-  # What: Adds a default route (0.0.0.0/0) to the internet gateway.
-  # Why: Required so traffic to the internet can leave the subnet via the internet gateway.
   MyDefaultRoute:
     Type: AWS::EC2::Route
     DependsOn: InternetGatewayAttachment
@@ -186,12 +148,9 @@ Resources:
 
 
   #============================
-  # Route Association
+  # Route Table associations
   #============================
 
-  # PublicSubnetRouteTableAssociation:
-  # What: Associates the first public subnet with the public route table.
-  # Why: Without this association, the subnet would not use the route table, meaning instances would have no internet access.
   AZ1PublicSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -205,33 +164,23 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
 
   #============================
-  # NAT Gateway & Private Routing
+  # NAT Gateway
   #============================
 
-
-  # NatGatewayEIP:
-  # What: Een vast, publiek IP-adres (Elastic IP) in AWS.
-  # Why: Een NAT Gateway communiceert met het internet namens jouw private servers. Om dat te kunnen doen, heeft de gateway een betrouwbaar, vast IP-adres nodig.
   NatGatewayEIP:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
 
-  # NatGateway:
-  # What: De NAT Gateway service van AWS.
-  # Why: Dit zorgt ervoor dat servers in je private subnets wél updates of code (zoals van GitHub) van het internet kunnen downloaden, zonder dat ze zelf direct bereikbaar zijn vanaf het internet (veiliger!).
   NatGateway:
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt NatGatewayEIP.AllocationId
-      SubnetId: !Ref AZ1PublicSubnet # De NAT Gateway moet zélf altijd in een publiek subnet staan!
+      SubnetId: !Ref AZ1PublicSubnet # De NAT Gateway moet zélf wél in een publiek subnet staan om bij het internet te kunnen.
       Tags:
         - Key: Name
           Value: NAT-GATEWAY
 
-  # PrivateRouteToInternet:
-  # What: Een regel in de private routekaart die internetverkeer doorstuurt naar de NAT Gateway.
-  # Why: Zonder deze regel weten de instances in het private subnet niet hoe ze het internet op moeten. Nu gaat al het uitgaande verkeer (0.0.0.0/0) veilig via de NAT.
   PrivateRouteToInternet:
     Type: AWS::EC2::Route
     Properties:
@@ -239,19 +188,12 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGateway
 
-
-  # AZ1PrivateSubnetRouteTableAssociation:
-  # What: Koppelt het eerste private subnet aan de private routekaart.
-  # Why: Zorgt dat de servers in AZ1-Private de regels van de private routekaart (en dus de NAT Gateway) gebruiken.
   AZ1PrivateSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref AZ1PrivateSubnet
       RouteTableId: !Ref PrivateRouteTable
 
-  # AZ2PrivateSubnetRouteTableAssociation:
-  # What: Koppelt het tweede private subnet aan de private routekaart.
-  # Why: Zorgt dat ook de servers in AZ2-Private op een veilige manier het internet op kunnen via de NAT.
   AZ2PrivateSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -260,16 +202,13 @@ Resources:
 
 
   #============================
-  # Security Groups
+  # Firewalls (Security Groups)
   #============================
 
-  # ALBSecurityGroup:
-  # What: De virtuele firewall voor de Load Balancer.
-  # Why: De Load Balancer is de voordeur van je website. Deze firewall staat inkomend HTTP (poort 80) verkeer toe vanuit de hele wereld (0.0.0.0/0), zodat klanten je webshop kunnen bezoeken.
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow HTTP traffic from the internet to the Load Balancer
+      GroupDescription: Sta HTTP verkeer toe vanaf het internet naar de Load Balancer
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -280,23 +219,20 @@ Resources:
         - Key: Name
           Value: ALB-SECURITY-GROUP
 
-  # WebServerSecurityGroup:
-  # What: De virtuele firewall voor de webservers (EC2 instances).
-  # Why: Deze is extra veilig ingesteld. Hij accepteert webverkeer (poort 80) NIET zomaar van het hele internet, maar ALLÉÉN als het afkomstig is van de Load Balancer (ALBSecurityGroup). We openen ook poort 22 voor SSH zodat je als beheerder eventueel nog in kunt loggen.
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow HTTP strictly from ALB, and SSH access
+      GroupDescription: Sta HTTP uitsluitend toe via de ALB, en sta SSH toegang toe voor beheer.
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref ALBSecurityGroup # Super veilig: alleen verkeer via de ALB is toegestaan!
+          SourceSecurityGroupId: !Ref ALBSecurityGroup # Alleen verkeer dat al door de Load Balancer firewall is gekomen mag door.
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 0.0.0.0/0 # Pas dit in de praktijk eventueel aan naar je eigen IP voor extra veiligheid
+          CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
           Value: WEBSERVER-SECURITY-GROUP
@@ -306,58 +242,43 @@ Resources:
 #============================
 Outputs:
   VPCRef:
-    Description: Reference to the VPC
+    Description: Een verwijzing naar de aangemaakte VPC
     Value: !Ref VPC
     Export:
       Name: !Join [":", [!Ref "AWS::StackName", "VPC"]]
 
   AZ1PrivateSubnetRef:
-    Description: Reference to the AZ1 Private Subnet
+    Description: Verwijzing naar het private subnet in AZ1
     Value: !Ref AZ1PrivateSubnet
     Export:
       Name: !Join [":", [!Ref "AWS::StackName", "AZ1PrivateSubnet"]]
 
   AZ2PrivateSubnetRef:
-    Description: Reference to the AZ2 Private Subnet
+    Description: Verwijzing naar het private subnet in AZ2
     Value: !Ref AZ2PrivateSubnet
     Export:
       Name: !Join [":", [!Ref "AWS::StackName", "AZ2PrivateSubnet"]]
 
   WebServerSecurityGroupRef:
-    Description: Reference to the Web Server Security Group
+    Description: Verwijzing naar de veilige firewall van de webservers
     Value: !Ref WebServerSecurityGroup
     Export:
       Name: !Join [":", [!Ref "AWS::StackName", "WebServerSecurityGroup"]]
 
   AZ1PublicSubnetRef:
-    Description: Reference to the AZ1 Public Subnet
+    Description: Verwijzing naar het publieke subnet in AZ1
     Value: !Ref AZ1PublicSubnet
     Export:
       Name: !Join [":", [!Ref "AWS::StackName", "AZ1PublicSubnet"]]
 
   AZ2PublicSubnetRef:
-    Description: Reference to the AZ2 Public Subnet
+    Description: Verwijzing naar het publieke subnet in AZ2
     Value: !Ref AZ2PublicSubnet
     Export:
       Name: !Join [":", [!Ref "AWS::StackName", "AZ2PublicSubnet"]]
 
   ALBSecurityGroupRef:
-    Description: Reference to the ALB Security Group
+    Description: Verwijzing naar de publieke firewall van de Load Balancer
     Value: !Ref ALBSecurityGroup
     Export:
       Name: !Join [":", [!Ref "AWS::StackName", "ALBSecurityGroup"]]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -4,7 +4,7 @@ Parameters:
   BaseStackName:
     Description: Name of the foundational network stack to import values from
     Type: String
-    Default: MyFundamentStack # Zorg dat je de fundament-stack echt zo noemt bij het uitrollen
+    Default: MyFundamentStack
 
   #============================
   # Database Parameters
@@ -25,9 +25,6 @@ Resources:
   # Database (RDS)
   #======================================
 
-  # RDSSecurityGroup:
-  # What: De virtuele firewall (Security Group) voor de PostgreSQL database.
-  # Why: Databases bevatten gevoelige (klant)data en mogen NOOIT direct aan het internet hangen. Deze firewall zorgt ervoor dat alleen EC2 instances (webservers) met de WebServerSecurityGroup verbinding mogen maken op database-poort 1433. Al het andere verkeer wordt keihard geweigerd.
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -44,9 +41,6 @@ Resources:
         - Key: Name
           Value: RDS-SECURITY-GROUP
 
-  # DBSubnetGroup:
-  # What: Een logische groepering van subnets speciaal voor de RDS Database.
-  # Why: AWS vereist dat een Multi-AZ database is verspreid over minimaal twee subnets in verschillende Availability Zones. Door hier bewust onze Private Subnets te selecteren, forceren we AWS om de database in de afgeschermde laag van het netwerk te bouwen.
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -58,15 +52,12 @@ Resources:
         - Key: Name
           Value: DB-SUBNET-GROUP
 
-  # RDSInstance:
-  # What: De daadwerkelijke database server (MS SQL SERVERQL).
-  # Why: De .NET applicatie (CloudShirt) is een webwinkel en heeft een persistente database nodig om de bestellingen en orders op te slaan (REQ-04). Door MultiAZ op 'true' te zetten, zorgt AWS automatisch voor een synchrone backup in de tweede Availability Zone, wat zorgt voor hoge beschikbaarheid bij storingen.
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
       Engine: sqlserver-ex
-      DBInstanceClass: db.t3.small # AANGEPAST naar t3.small
-      LicenseModel: license-included # TOEGEVOEGD
+      DBInstanceClass: db.t3.small
+      LicenseModel: license-included
       AllocatedStorage: 20
       MasterUsername: !Ref DBUser
       MasterUserPassword: !Ref DBPassword
@@ -84,9 +75,6 @@ Resources:
   # Elastic File System (EFS)
   #======================================
 
-  # EFSSecurityGroup:
-  # What: De firewall (Security Group) voor de gedeelde netwerkschijf (EFS).
-  # Why: Zorgt ervoor dat alleen onze EC2 webservers (via het Network File System protocol op poort 2049) bij deze gedeelde schijf kunnen om hun logbestanden weg te schrijven.
   EFSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -103,9 +91,6 @@ Resources:
         - Key: Name
           Value: EFS-SECURITY-GROUP
 
-  # MySharedDrive:
-  # What: De virtuele en elastische harde schijf (EFS) zelf.
-  # Why: Auto Scaling gooit EC2-servers regelmatig weg. Om te voorkomen dat web-logs verdwijnen als een server wordt verwijderd, gebruiken we deze EFS als een centrale opslagplek (REQ-03) waar álle servers hun logs tegelijkertijd naar wegschrijven.
   MySharedDrive:
     Type: AWS::EFS::FileSystem
     Properties:
@@ -114,9 +99,6 @@ Resources:
         - Key: Name
           Value: CLOUDSHIRT-SHARED-LOGS
 
-  # MountTargetAZ1:
-  # What: Een netwerkaansluitpunt (Mount Target) in het eerste private subnet (AZ1).
-  # Why: EFS is een regionale service. Om de instances in AZ1 toegang te geven tot de EFS, moet de EFS fysiek een IP-adres (aansluitpunt) krijgen in het subnet van die instances.
   MountTargetAZ1:
     Type: AWS::EFS::MountTarget
     Properties:
@@ -126,9 +108,6 @@ Resources:
       SecurityGroups:
         - !Ref EFSSecurityGroup
 
-  # MountTargetAZ2:
-  # What: Een netwerkaansluitpunt (Mount Target) in het tweede private subnet (AZ2).
-  # Why: De Load Balancer (REQ-01) en Auto Scaling verdelen verkeer en instances over twee AZ's. Daarom moet de EFS schijf ook vanuit het tweede subnet bereikbaar zijn.
   MountTargetAZ2:
     Type: AWS::EFS::MountTarget
     Properties:
@@ -139,9 +118,6 @@ Resources:
         - !Ref EFSSecurityGroup
 
 Outputs:
-  # FileSystemIdRef:
-  # What: Exporteert de ID van de gemaakte EFS schijf.
-  # Why: In Fase 3 (Compute) moeten we in het opstartscript (UserData) van de webservers weten wélke EFS-schijf we precies moeten "mounten". Door dit ID te exporteren, kunnen we het in het volgende CloudFormation template importeren.
   FileSystemIdRef:
     Description: Reference to the shared EFS drive ID
     Value: !Ref MySharedDrive

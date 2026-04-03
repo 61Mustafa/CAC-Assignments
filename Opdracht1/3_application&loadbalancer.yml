@@ -9,7 +9,7 @@ Parameters:
   StorageStackName:
     Description: Name of the storage stack (where EFS is created)
     Type: String
-    Default: MyStorageStack # Zorg dat je de Data & Storage stack straks zo noemt
+    Default: MyStorageStack
 
   KeyName:
     Description: Name of an existing EC2 KeyPair for SSH access
@@ -26,9 +26,6 @@ Resources:
   # Load Balancing
   #======================================
 
-  # ApplicationLoadBalancer:
-  # What: De virtuele verkeersregelaar (ALB) die op het internet is aangesloten.
-  # Why: Zorgt voor High Availability (REQ-01) door binnenkomende bezoekers eerlijk te verdelen over de webservers in de twee onderliggende Availability Zones.
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -45,9 +42,6 @@ Resources:
         - Key: Name
           Value: APPLICATION-LOADBALANCER
 
-  # TargetGroup:
-  # What: Een logische groep (de 'bak') waar de Auto Scaling Group straks de EC2 instances in plaatst.
-  # Why: De Load Balancer stuurt verkeer naar deze Target Group. De Health Checks controleren elke 30 seconden of de .NET app op de server nog reageert (poort 80). Zo niet, krijgt die server geen verkeer meer.
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -68,9 +62,6 @@ Resources:
         - Key: Name
           Value: TARGET-GROUP
 
-  # ALBListener:
-  # What: De "oren" van de Load Balancer.
-  # Why: Luistert naar inkomend HTTP-verkeer (poort 80) vanaf het internet en stuurt het linea recta door (forward) naar de webservers in de Target Group.
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -85,21 +76,17 @@ Resources:
   # Launch Template
   #======================================
 
-  # WebAppLaunchTemplate:
-  # What: De blauwdruk (sjabloon) voor elke nieuwe webserver die Auto Scaling gaat aanmaken.
-  # Why: Bevat alle instructies over het besturingssysteem, de firewall en vooral: het opstartscript (UserData) dat de server volledig automatisch installeert zonder menselijke tussenkomst.
   WebAppLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateName: CloudShirt-LaunchTemplate
       LaunchTemplateData:
         ImageId: !Ref LatestAmiId
-        InstanceType: t2.micro # Gratis tier vriendelijk
+        InstanceType: t2.micro # Graties tier
         KeyName: !Ref KeyName
         SecurityGroupIds:
           - Fn::ImportValue: !Sub "${BaseStackName}:WebServerSecurityGroup"
 
-        # UserData is het bash script dat éénmalig draait als de server voor het eerst opstart (als root).
         UserData:
           Fn::Base64: !Sub
             - |
@@ -114,16 +101,15 @@ Resources:
               mount -t efs -o tls ${EfsId}:/ /var/log/cloudshirt
               echo "${EfsId}:/ /var/log/cloudshirt efs defaults,_netdev 0 0" >> /etc/fstab
 
-              # 3. CloudShirt ophalen van de juiste repo
+              # 3. CloudShirt ophalen van de github repo
               cd /home/ec2-user
               git clone https://github.com/looking4ward/CloudShirt.git
               
-              # 4. Database connectie instellen met de SED commando's van de docent
-              # We vervangen ${!RDSENDPOINT} door de werkelijke url uit stack 2. Let op dat we ook de DBUser en DBPassword variabelen invullen!
+              # 4. Database connectie instellen met de SED commando's
               sed -i "s/Server.*CatalogDb;/Server=${DatabaseEndpoint},1433;User ID=${DBUser};Password=${DBPassword};Initial Catalog=Microsoft.eShopOnWeb.CatalogDb;/" /home/ec2-user/CloudShirt/src/Web/appsettings.json
               sed -i "s/Server.*Identity;/Server=${DatabaseEndpoint},1433;User ID=${DBUser};Password=${DBPassword};Initial Catalog=Microsoft.eShopOnWeb.Identity;/" /home/ec2-user/CloudShirt/src/Web/appsettings.json
 
-              # 5. Publiceren (volgens hint docent)
+              # 5. Publiceren
               export HOME=/home/ec2-user
               export DOTNET_CLI_HOME=/home/ec2-user
               cd /home/ec2-user/CloudShirt/src/Web
@@ -136,8 +122,8 @@ Resources:
                 Fn::ImportValue: !Sub "${StorageStackName}:FileSystemId"
               DatabaseEndpoint:
                 Fn::ImportValue: !Sub "${StorageStackName}:DatabaseEndpoint"
-              DBUser: adminAWS # Vul hier dezelfde user in als in stack 2
-              DBPassword: Komjenietin123 # Vul hier hetzelfde wachtwoord in als in stack 2
+              DBUser: adminAWS
+              DBPassword: Komjenietin123
 
         TagSpecifications:
           - ResourceType: instance
