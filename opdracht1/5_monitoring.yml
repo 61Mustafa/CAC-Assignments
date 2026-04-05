@@ -16,37 +16,37 @@ Parameters:
     Type: AWS::EC2::KeyPair::KeyName
     Default: vockey
 
-    LatestAmiId:
+  LatestAmiId:
       Description: Latest Amazon Linux 2 AMI
       Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
       Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
 Resources:
 
-#======================================
-# Security
-#======================================
+  #======================================
+  # Security
+  #======================================
 
-# MonitoringSecurityGroup:
-# We moeten bij de server kunnen via SSH (poort 22) en via de browser naar het Kibana dashboard (poort 5601).
-MonitoringSecurityGroup:
-  Type: AWS::EC2::SecurityGroup
-  Properties:
-    GroupDescription: Allow SSH and Kibana (5601) traffic from the internet
-    VpcId:
-      Fn::ImportValue: !Sub "${BaseStackName}:VPC"
-    SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 22
-        ToPort: 22
-        CidrIp: 0.0.0.0/0
-      - IpProtocol: tcp
-        FromPort: 5601
-        ToPort: 5601
-        CidrIp: 0.0.0.0/0
-    Tags:
-      - Key: Name
-        Value: MONITORING-SECURITY-GROUP
+  # MonitoringSecurityGroup:
+  # We moeten bij de server kunnen via SSH (poort 22) en via de browser naar het Kibana dashboard (poort 5601).
+  MonitoringSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH and Kibana (5601) traffic from the internet
+      VpcId:
+        Fn::ImportValue: !Sub "${BaseStackName}:VPC"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 5601
+          ToPort: 5601
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: MONITORING-SECURITY-GROUP
 
   #======================================
   # EC2 Monitoring Server
