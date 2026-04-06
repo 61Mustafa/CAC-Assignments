@@ -1,0 +1,123 @@
+Description: Dit CloudFormation bestand maakt een Serverless Lambda functie die elke nacht automatisch EBS én RDS Snapshots (back-ups) maakt (REQ-07 & REQ-08).
+
+Resources:
+  #======================================
+  # 1. IAM Rechten (Security eerst!)
+  #======================================
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CloudShirt-Lambda-Backup-Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: FullBackupPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:CreateSnapshot
+                  - ec2:CreateTags
+                  - rds:DescribeDBInstances
+                  - rds:CreateDBSnapshot
+                  - rds:AddTagsToResource
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  #======================================
+  # 2. De Serverless Lambda Functie
+  #======================================
+
+  NightlyBackupFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CloudShirt-Nightly-Backup
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 90 # Iets meer tijd gegeven voor de DB backup
+      Code:
+        ZipFile: |
+          import boto3
+          import datetime
+
+          def lambda_handler(event, context):
+              ec2 = boto3.client('ec2')
+              rds = boto3.client('rds')
+              timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M')
+          
+              print("1. Start met EC2 (EBS) back-ups...")
+              instances = ec2.describe_instances(
+                  Filters=[{'Name': 'tag:Name', 'Values': ['CLOUDSHIRT-ASG-INSTANCE']}]
+              )
+
+              ebs_count = 0
+              for reservation in instances['Reservations']:
+                  for instance in reservation['Instances']:
+                      instance_id = instance['InstanceId']
+                      for block_device in instance.get('BlockDeviceMappings', []):
+                          volume_id = block_device['Ebs']['VolumeId']
+                          print(f"Back-up EBS: {volume_id}")
+                          ec2.create_snapshot(
+                              VolumeId=volume_id,
+                              Description=f"Auto-backup van {instance_id}",
+                              TagSpecifications=[{
+                                  'ResourceType': 'snapshot',
+                                  'Tags': [{'Key': 'Name', 'Value': f"Backup-{instance_id}-{timestamp}"}]
+                              }]
+                          )
+                          ebs_count += 1
+
+              print("2. Start met RDS Database back-ups...")
+              db_count = 0
+              db_instances = rds.describe_db_instances()
+              for db in db_instances['DBInstances']:
+                  db_id = db['DBInstanceIdentifier']
+                  snap_id = f"backup-{db_id}-{timestamp}"
+                  print(f"Back-up RDS: {db_id}")
+          
+                  # Maak de daadwerkelijke database snapshot
+                  rds.create_db_snapshot(
+                      DBSnapshotIdentifier=snap_id,
+                      DBInstanceIdentifier=db_id,
+                      Tags=[{'Key': 'Name', 'Value': snap_id}]
+                  )
+                  db_count += 1
+
+              return {
+                  'statusCode': 200,
+                  'body': f'Succes! {ebs_count} EBS back-ups en {db_count} RDS back-ups gestart.'
+              }
+
+  #======================================
+  # 3. De Tijdklok (EventBridge)
+  #======================================
+
+  NightlyBackupSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: Trigger-Nightly-Backup
+      Description: "Triggers the Backup Lambda function every minute (TESTING ONLY)"
+      ScheduleExpression: "rate(1 minute)" # Aangepast voor snelle test!
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt NightlyBackupFunction.Arn
+          Id: "TargetFunctionV1"
+
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref NightlyBackupFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt NightlyBackupSchedule.Arn
