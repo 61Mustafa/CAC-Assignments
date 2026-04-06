@@ -2,40 +2,8 @@ Description: Dit CloudFormation bestand maakt een Serverless Lambda functie die 
 
 Resources:
   #======================================
-  # 1. IAM Rechten (Security eerst!)
-  #======================================
-
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: CloudShirt-Lambda-Backup-Role
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: FullBackupPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ec2:DescribeInstances
-                  - ec2:CreateSnapshot
-                  - ec2:CreateTags
-                  - rds:DescribeDBInstances
-                  - rds:CreateDBSnapshot
-                  - rds:AddTagsToResource
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: "*"
-
-  #======================================
-  # 2. De Serverless Lambda Functie
+  # 1. De Serverless Lambda Functie
+  # (LabRole gebruikt i.p.v. nieuwe IAM rol - voclabs heeft geen iam:CreateRole rechten)
   #======================================
 
   NightlyBackupFunction:
@@ -43,7 +11,7 @@ Resources:
     Properties:
       FunctionName: CloudShirt-Nightly-Backup
       Handler: index.lambda_handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role: arn:aws:iam::492195032062:role/LabRole
       Runtime: python3.9
       Timeout: 90 # Iets meer tijd gegeven voor de DB backup
       Code:
