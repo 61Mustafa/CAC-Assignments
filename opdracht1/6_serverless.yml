@@ -1,8 +1,8 @@
-Description: Dit CloudFormation bestand maakt een Serverless Lambda functie die EBS back-ups maakt én een Order-tabel exporteert naar een S3 Bucket (REQ-07 & REQ-08).
+Description: Dit CloudFormation bestand maakt een Serverless Lambda functie die een mockup van een database in csv exporteert naar een S3 Bucket.
 
 Resources:
   #======================================
-  # 1. De S3 Bucket (Voor de Order Export)
+  # 1. S3 Bucket
   #======================================
   ExportBucket:
     Type: AWS::S3::Bucket
@@ -10,8 +10,7 @@ Resources:
       BucketName: !Sub "cloudshirt-order-exports-${AWS::AccountId}-${AWS::Region}"
 
   #======================================
-  # 2. De Serverless Lambda Functie
-  # (LabRole gebruikt i.p.v. nieuwe IAM rol - voclabs heeft geen iam:CreateRole rechten)
+  # 2. Serverless Lambda
   #======================================
   NightlyBackupFunction:
     Type: AWS::Lambda::Function
@@ -26,54 +25,37 @@ Resources:
           BUCKET_NAME: !Ref ExportBucket
       Code:
         ZipFile: |
-          import boto3
-          import datetime
-          import os
-
+            import boto3
+            import datetime
+            import os
+          
           def lambda_handler(event, context):
-              ec2 = boto3.client('ec2')
-              s3 = boto3.client('s3')
-              timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M')
-              bucket = os.environ['BUCKET_NAME']
-
-              print("1. Start met EC2 (EBS) back-ups (REQ-08)...")
-              instances = ec2.describe_instances(
-                  Filters=[{'Name': 'tag:Name', 'Values': ['CLOUDSHIRT-ASG-INSTANCE']}]
-              )
-
-              ebs_count = 0
-              for reservation in instances['Reservations']:
-                  for instance in reservation['Instances']:
-                      instance_id = instance['InstanceId']
-                      for block_device in instance.get('BlockDeviceMappings', []):
-                          volume_id = block_device['Ebs']['VolumeId']
-                          ec2.create_snapshot(
-                              VolumeId=volume_id,
-                              Description=f"Auto-backup van {instance_id}",
-                              TagSpecifications=[{
-                                  'ResourceType': 'snapshot',
-                                  'Tags': [{'Key': 'Name', 'Value': f"Backup-{instance_id}-{timestamp}"}]
-                              }]
-                          )
-                          ebs_count += 1
-
-              print("2. Start Order Tabel Export naar S3 (REQ-07)...")
-              csv_content = "OrderID,OrderDate,CustomerEmail,TotalAmount\n"
-              csv_content += f"1001,{timestamp},test@microsoft.com,59.95\n"
-              csv_content += f"1002,{timestamp},admin@cloudshirt.nl,120.00\n"
-
-              file_name = f"Order-Export-{timestamp}.csv"
-              s3.put_object(
-                  Bucket=bucket,
-                  Key=file_name,
-                  Body=csv_content,
-                  ContentType='text/csv'
-              )
-
-              return {
-                  'statusCode': 200,
-                  'body': f'Succes! {ebs_count} EBS back-ups gemaakt en {file_name} geexporteerd naar S3 bucket: {bucket}.'
-              }
+            s3 = boto3.client('s3')
+            timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M')
+            bucket = os.environ['BUCKET_NAME']
+            
+            print("Start Order Tabel Export naar S3...")
+            
+            # Genereer de CSV-inhoud
+            csv_content = "OrderID,OrderDate,CustomerEmail,TotalAmount\n"
+            csv_content += f"1001,{timestamp},test@microsoft.com,59.95\n"
+            csv_content += f"1002,{timestamp},admin@cloudshirt.nl,120.00\n"
+            
+            # Bepaal de bestandsnaam op basis van de huidige tijd
+            file_name = f"Order-Export-{timestamp}.csv"
+            
+            # Upload het CSV bestand naar de S3 bucket
+            s3.put_object(
+            Bucket=bucket,
+            Key=file_name,
+            Body=csv_content,
+            ContentType='text/csv'
+            )
+            
+            return {
+            'statusCode': 200,
+            'body': f'Succes! Bestand {file_name} is geëxporteerd naar S3 bucket: {bucket}.'
+            }
 
   #======================================
   # 3. De Tijdklok (EventBridge)
@@ -82,8 +64,8 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: Trigger-Nightly-Backup
-      Description: "Triggers the Backup and Export Lambda function every 10 minutes"
-      ScheduleExpression: "rate(10 minutes)"
+      Description: "Triggers the Backup and Export Lambda function every 1 minute"
+      ScheduleExpression: "rate(1 minute)"
       State: ENABLED
       Targets:
         - Arn: !GetAtt NightlyBackupFunction.Arn

@@ -50,7 +50,7 @@ aws cloudformation deploy \
   --parameter-overrides BaseStackName=MyFundamentStack StorageStackName=MyStorageStack
 
 # ==========================================
-# 6. Serverless Stack (Lambda Backups)
+# 6. Serverless Stack (Lambda)
 # ==========================================
 echo "6/6 Deploying Serverless Stack (Lambda)..."
 aws cloudformation deploy \
@@ -58,9 +58,9 @@ aws cloudformation deploy \
   --template-file 6_serverless.yml \
   --capabilities CAPABILITY_NAMED_IAM
 
-echo "✅ Alle stacks zijn succesvol uitgerold!!!"
+echo "Alle stacks zijn succesvol uitgerold!!!"
 
-# Haal de DNS naam (URL) van de Load Balancer op en die van Kibana
+# Haal de DNS naam (URL) van de Load Balancer,Kibana en S3 bucket
 ALB_URL=$(aws cloudformation describe-stacks --stack-name MyAppStack --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDnsName'].OutputValue" --output text)
 KIBANA_URL=$(aws cloudformation describe-stacks --stack-name MyMonitoringStack --query "Stacks[0].Outputs[?OutputKey=='KibanaUrl'].OutputValue" --output text)
 S3_BUCKET=$(aws cloudformation describe-stacks --stack-name MyServerlessStack --query "Stacks[0].Outputs[?OutputKey=='S3BucketName'].OutputValue" --output text)

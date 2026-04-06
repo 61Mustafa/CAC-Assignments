@@ -24,10 +24,9 @@ Parameters:
 Resources:
 
   #======================================
-  # Security
+  # Firewalls (Security Groups)
   #======================================
 
-  # MonitoringSecurityGroup:
   # We moeten bij de server kunnen via SSH (poort 22) en via de browser naar het Kibana dashboard (poort 5601).
   MonitoringSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -49,28 +48,26 @@ Resources:
           Value: MONITORING-SECURITY-GROUP
 
   #======================================
-  # EC2 Monitoring Server
+  # EC2 Monitoring Server (ELK)
   #======================================
 
-  # ElkServer:
-  # What: De EC2 server waarop Elasticsearch, Logstash en Kibana draaien.
-  # Why: Deze server staat in het publieke subnet zodat we erbij kunnen. We geven hem óók de WebServerSecurityGroup, omdat hij daarmee (net als de webservers) veilig de EFS-schijf mag aankoppelen!
+  # Deze server staat in het publieke subnet zodat we erbij kunnen. We geven hem óók de WebServerSecurityGroup, omdat we daarmee de EFS aankoppelen!
   ElkServer:
     Type: AWS::EC2::Instance
     Properties:
       ImageId: !Ref LatestAmiId
-      InstanceType: t3.medium # ELK is zwaar en heeft minimaal 4GB RAM nodig!
+      InstanceType: t3.medium
       KeyName: !Ref KeyName
       SubnetId:
         Fn::ImportValue: !Sub "${BaseStackName}:AZ1PublicSubnet"
       SecurityGroupIds:
         - !Ref MonitoringSecurityGroup
-        - Fn::ImportValue: !Sub "${BaseStackName}:WebServerSecurityGroup" # De "Sleutel" tot EFS
+        - Fn::ImportValue: !Sub "${BaseStackName}:WebServerSecurityGroup"
       Tags:
         - Key: Name
           Value: ELK-MONITORING-SERVER
 
-      # Automatische ELK installatie
+      # ELK installatie
       UserData:
         Fn::Base64: !Sub
           - |
@@ -78,7 +75,7 @@ Resources:
             yum update -y
             yum install -y java-1.8.0-openjdk amazon-efs-utils wget
 
-            # 1. Mount EFS (Zodat Logstash de webapp.log kan lezen!)
+            # 1. Mount EFS (om webapp.log te kunnen lezen!)
             mkdir -p /var/log/cloudshirt
             mount -t efs -o tls ${EfsId}:/ /var/log/cloudshirt
             echo "${EfsId}:/ /var/log/cloudshirt efs defaults,_netdev 0 0" >> /etc/fstab
@@ -99,7 +96,7 @@ Resources:
             # 3. Installeer Elasticsearch, Logstash & Kibana
             yum install -y elasticsearch kibana logstash
 
-            # 4. Configureer Elasticsearch (Beveiliging uit voor testdoeleinden & RAM limiet)
+            # 4. Configureer Elasticsearch (B=beveiliging heb ik laten uitstaan voor testdoeleinden & ram limiet)
             sed -i 's/xpack.security.enabled: true/xpack.security.enabled: false/' /etc/elasticsearch/elasticsearch.yml
             echo "-Xms1g" > /etc/elasticsearch/jvm.options.d/memory.options
             echo "-Xmx1g" >> /etc/elasticsearch/jvm.options.d/memory.options
@@ -124,7 +121,7 @@ Resources:
             }
             EOF
 
-            # 7. Start alles op (Dit duurt zo'n 3 tot 5 minuten)
+            # 7. Start alles op (Ong. 3 tot 5 min)
             systemctl daemon-reload
             systemctl enable elasticsearch kibana logstash
             systemctl start elasticsearch
@@ -136,5 +133,5 @@ Resources:
 
 Outputs:
   KibanaUrl:
-    Description: De URL om je log-dashboard te bekijken!
+    Description: De URL om de log dashboard te bekijken.
     Value: !Sub "http://${ElkServer.PublicIp}:5601"

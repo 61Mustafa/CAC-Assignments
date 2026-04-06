@@ -1,4 +1,4 @@
-Description: Dit CloudFormation bestand maakt de Auto Scaling Group en de Scheduled Actions (tijdschema's) aan voor REQ-02.
+Description: Dit CloudFormation bestand maakt de Auto Scaling Group en de Scheduled Actions aan.
 
 Parameters:
   BaseStackName:

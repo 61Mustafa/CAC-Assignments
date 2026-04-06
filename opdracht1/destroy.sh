@@ -57,4 +57,4 @@ aws cloudformation delete-stack --stack-name MyFundamentStack
 aws cloudformation wait stack-delete-complete --stack-name MyFundamentStack
 echo "FundamentStack verwijderd."
 
-echo "✅ Alles is platgegooid! De AWS omgeving is weer helemaal schoon en mijn credits zijn weer veilig :))."
+echo "Alles is platgegooid! De AWS omgeving is weer helemaal schoon en mijn credits zijn weer veilig :))."
