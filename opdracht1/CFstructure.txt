@@ -42,6 +42,4 @@
    - Lambda Function
    - Lambda Permission
    - EventBridge Rule (trigger)
-   - S3 Bucket (order exports)
-
-=========================================
+   - S3 Bucket (order exports met mockup data)
