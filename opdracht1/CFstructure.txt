@@ -1,0 +1,47 @@
+=========================================
+ CloudFormation Stack Overzicht
+=========================================
+
+1_fundaments.yml  →  Stack: MyFundamentStack
+   Netwerk & Security
+   - VPC
+   - Subnets (public + private)
+   - Internet Gateway + NAT Gateway
+   - Route Tables + Associaties
+   - Security Groups
+   - Elastic IP (voor NAT)
+
+2_data&storage.yml  →  Stack: MyStorageStack
+   Database & Opslag
+   - RDS DB Instance (MySQL/Postgres)
+   - RDS Subnet Group
+   - EFS File System
+   - EFS Mount Targets
+   - Security Group (EFS/RDS)
+
+3_application&loadbalancer.yml  →  Stack: MyAppStack
+   Applicatie & Load Balancer
+   - Application Load Balancer (ALB)
+   - ALB Listener
+   - Target Group
+   - Launch Template (EC2 configuratie)
+
+4_auto_scaling.yml  →  Stack: MyASGStack
+   Auto Scaling
+   - Auto Scaling Group (ASG)
+   - Scheduled Actions (scale up/down op tijdstip)
+
+5_monitoring.yml  →  Stack: MyMonitoringStack
+   Monitoring (ELK)
+   - EC2 Instance (Elasticsearch + Kibana)
+   - Security Group
+   - Key Pair referentie
+
+6_serverless.yml  →  Stack: MyServerlessStack
+   Serverless
+   - Lambda Function
+   - Lambda Permission
+   - EventBridge Rule (trigger)
+   - S3 Bucket (order exports)
+
+=========================================
