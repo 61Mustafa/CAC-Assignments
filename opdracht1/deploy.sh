@@ -63,8 +63,11 @@ echo "✅ Alle stacks zijn succesvol uitgerold!!!"
 # Haal de DNS naam (URL) van de Load Balancer op en die van Kibana
 ALB_URL=$(aws cloudformation describe-stacks --stack-name MyAppStack --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDnsName'].OutputValue" --output text)
 KIBANA_URL=$(aws cloudformation describe-stacks --stack-name MyMonitoringStack --query "Stacks[0].Outputs[?OutputKey=='KibanaUrl'].OutputValue" --output text)
+S3_BUCKET=$(aws cloudformation describe-stacks --stack-name MyServerlessStack --query "Stacks[0].Outputs[?OutputKey=='S3BucketName'].OutputValue" --output text)
 
 echo "De applicatie is bereikbaar op:"
 echo "http://$ALB_URL"
 echo "Kibana Dashboard is bereikbaar op:"
 echo "http://$KIBANA_URL"
+echo "S3 Bucket voor Order exports:"
+echo "s3://$S3_BUCKET"

@@ -7,6 +7,12 @@ echo "Dit kan zo'n 10 tot 15 minuten duren (het verwijderen van de RDS database 
 # 0. Verwijder Serverless Stack (Stack 6)
 # ==========================================
 echo "1/6 Verwijderen van Serverless Stack (MyServerlessStack)..."
+# S3 bucket moet eerst leeg zijn anders faalt CloudFormation het verwijderen
+S3_BUCKET=$(aws cloudformation describe-stacks --stack-name MyServerlessStack --query "Stacks[0].Outputs[?OutputKey=='S3BucketName'].OutputValue" --output text 2>/dev/null)
+if [ -n "$S3_BUCKET" ]; then
+  echo "  S3 bucket '$S3_BUCKET' leegmaken..."
+  aws s3 rm s3://$S3_BUCKET --recursive
+fi
 aws cloudformation delete-stack --stack-name MyServerlessStack
 aws cloudformation wait stack-delete-complete --stack-name MyServerlessStack
 echo "ServerlessStack verwijderd."
