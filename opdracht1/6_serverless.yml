@@ -18,7 +18,7 @@ Resources:
     Properties:
       FunctionName: CloudShirt-Nightly-Backup-And-Export
       Handler: index.lambda_handler
-      Role: arn:aws:iam::492195032062:role/LabRole
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
       Runtime: python3.9
       Timeout: 60
       Environment:
@@ -82,8 +82,8 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: Trigger-Nightly-Backup
-      Description: "Triggers the Backup and Export Lambda function every minute"
-      ScheduleExpression: "rate(1 minute)"
+      Description: "Triggers the Backup and Export Lambda function every 10 minutes"
+      ScheduleExpression: "rate(10 minutes)"
       State: ENABLED
       Targets:
         - Arn: !GetAtt NightlyBackupFunction.Arn

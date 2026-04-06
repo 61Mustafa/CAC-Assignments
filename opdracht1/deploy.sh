@@ -68,6 +68,6 @@ S3_BUCKET=$(aws cloudformation describe-stacks --stack-name MyServerlessStack --
 echo "De applicatie is bereikbaar op:"
 echo "http://$ALB_URL"
 echo "Kibana Dashboard is bereikbaar op:"
-echo "http://$KIBANA_URL"
+echo "$KIBANA_URL"
 echo "S3 Bucket voor Order exports:"
 echo "s3://$S3_BUCKET"
