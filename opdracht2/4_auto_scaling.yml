@@ -1,0 +1,64 @@
+Description: Dit CloudFormation bestand maakt de Auto Scaling Group en de Scheduled Actions aan.
+
+Parameters:
+  BaseStackName:
+    Description: Name of the foundational network stack
+    Type: String
+    Default: MyFundamentStack
+
+  AppStackName:
+    Description: Name of the application stack (Load Balancer & Launch Template)
+    Type: String
+    Default: MyAppStack
+
+Resources:
+  #======================================
+  # Auto Scaling Group
+  #======================================
+
+  WebAppAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: ASG
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub "${BaseStackName}:AZ1PrivateSubnet"
+        - Fn::ImportValue: !Sub "${BaseStackName}:AZ2PrivateSubnet"
+      LaunchTemplate:
+        LaunchTemplateId:
+          Fn::ImportValue: !Sub "${AppStackName}:LaunchTemplateId"
+        Version:
+          Fn::ImportValue: !Sub "${AppStackName}:LaunchTemplateVersion"
+      MinSize: '1'
+      MaxSize: '5'
+      DesiredCapacity: '1'
+      TargetGroupARNs:
+        - Fn::ImportValue: !Sub "${AppStackName}:TargetGroupArn"
+      Tags:
+        - Key: Name
+          Value: CLOUDSHIRT-ASG-INSTANCE
+          PropagateAtLaunch: true # Zorgt ervoor dat elke EC2 instance deze tag krijgt
+  #======================================
+  # Scheduled Actions
+  #======================================
+
+  ScaleUpAction:
+    Type: AWS::AutoScaling::ScheduledAction
+    Properties:
+      AutoScalingGroupName: !Ref WebAppAutoScalingGroup
+      # ScheduledActionName: ScaleUpForEveningTraffic
+      # StartTime: "2026-04-01T16:35:00Z" # Eenmalig voor test purposes
+      Recurrence: "0 16 * * *" # Elke dag om 16:00 UTC (18:00 Nederlandse tijd)
+      MinSize: 3
+      DesiredCapacity: 3
+      MaxSize: 5
+
+  ScaleDownAction:
+    Type: AWS::AutoScaling::ScheduledAction
+    Properties:
+      AutoScalingGroupName: !Ref WebAppAutoScalingGroup
+      # ScheduledActionName: ScaleDownAfterEveningTraffic
+      # StartTime: "2026-04-01T17:20:00Z" # Eenmalig voor test purposes
+      Recurrence: "0 18 * * *" # Elke dag om 18:00 UTC (20:00 Nederlandse tijd)
+      MinSize: 1
+      DesiredCapacity: 1
+      MaxSize: 5

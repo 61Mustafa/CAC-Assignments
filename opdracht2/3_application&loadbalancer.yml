@@ -1,0 +1,157 @@
+Description: Dit CloudFormation bestand maakt de Load Balancer en het EC2 Launch Template voor de CloudShirt .NET webapplicatie.
+
+Parameters:
+  BaseStackName:
+    Description: Name of the foundational network stack
+    Type: String
+    Default: MyFundamentStack
+
+  StorageStackName:
+    Description: Name of the storage stack (where EFS is created)
+    Type: String
+    Default: MyStorageStack
+
+  KeyName:
+    Description: Name of an existing EC2 KeyPair for SSH access
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: vockey
+
+  LatestAmiId:
+    Description: Latest Amazon Linux 2 AMI
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+Resources:
+  #======================================
+  # Load Balancing
+  #======================================
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: ALB
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
+      Subnets:
+        - Fn::ImportValue: !Sub "${BaseStackName}:AZ1PublicSubnet" # ALB móét in publieke subnets staan
+        - Fn::ImportValue: !Sub "${BaseStackName}:AZ2PublicSubnet"
+      SecurityGroups:
+        - Fn::ImportValue: !Sub "${BaseStackName}:ALBSecurityGroup"
+      Tags:
+        - Key: Name
+          Value: APPLICATION-LOADBALANCER
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: CloudShirt-TG
+      Port: 80
+      Protocol: HTTP
+      VpcId:
+        Fn::ImportValue: !Sub "${BaseStackName}:VPC"
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Tags:
+        - Key: Name
+          Value: TARGET-GROUP
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  #======================================
+  # Launch Template
+  #======================================
+
+  WebAppLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: CloudShirt-LaunchTemplate
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: t2.micro # Graties tier
+        KeyName: !Ref KeyName
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub "${BaseStackName}:WebServerSecurityGroup"
+
+        UserData:
+          Fn::Base64: !Sub
+            - |
+              #!/bin/bash
+              # 1. Updates en tools (inclusief .NET 6 SDK)
+              yum update -y
+              rpm -Uvh https://packages.microsoft.com/config/centos/7/packages-microsoft-prod.rpm
+              yum install -y git jq amazon-efs-utils dotnet-sdk-6.0
+
+              # 2. EFS Aankoppelen (Logs)
+              mkdir -p /var/log/cloudshirt
+              mount -t efs -o tls ${EfsId}:/ /var/log/cloudshirt
+              echo "${EfsId}:/ /var/log/cloudshirt efs defaults,_netdev 0 0" >> /etc/fstab
+
+              # 3. CloudShirt ophalen van de github repo
+              cd /home/ec2-user
+              git clone https://github.com/looking4ward/CloudShirt.git
+              
+              # 4. Database connectie instellen met de SED commando's
+              sed -i "s/Server.*CatalogDb;/Server=${DatabaseEndpoint},1433;User ID=${DBUser};Password=${DBPassword};Initial Catalog=Microsoft.eShopOnWeb.CatalogDb;/" /home/ec2-user/CloudShirt/src/Web/appsettings.json
+              sed -i "s/Server.*Identity;/Server=${DatabaseEndpoint},1433;User ID=${DBUser};Password=${DBPassword};Initial Catalog=Microsoft.eShopOnWeb.Identity;/" /home/ec2-user/CloudShirt/src/Web/appsettings.json
+
+              # 5. Publiceren
+              export HOME=/home/ec2-user
+              export DOTNET_CLI_HOME=/home/ec2-user
+              cd /home/ec2-user/CloudShirt/src/Web
+              dotnet publish -c Release -o /home/ec2-user/release
+              
+              # 6. Opstarten vanuit de release folder en logs naar EFS sturen
+              cd /home/ec2-user/release
+              nohup dotnet Web.dll --urls http://0.0.0.0:80 > /var/log/cloudshirt/webapp.log 2>&1 &
+            - EfsId:
+                Fn::ImportValue: !Sub "${StorageStackName}:FileSystemId"
+              DatabaseEndpoint:
+                Fn::ImportValue: !Sub "${StorageStackName}:DatabaseEndpoint"
+              DBUser: adminAWS
+              DBPassword: Komjenietin123
+
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: CloudShirt-WebServer
+
+Outputs:
+  LaunchTemplateIdRef:
+    Description: Reference to the Launch Template ID
+    Value: !Ref WebAppLaunchTemplate
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "LaunchTemplateId"]]
+
+  LaunchTemplateVersionRef:
+    Description: Reference to the Launch Template Latest Version
+    Value: !GetAtt WebAppLaunchTemplate.LatestVersionNumber
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "LaunchTemplateVersion"]]
+
+  TargetGroupArnRef:
+    Description: Reference to the Target Group ARN
+    Value: !Ref TargetGroup
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "TargetGroupArn"]]
+
+  LoadBalancerDnsName:
+    Description: De URL waar bezoekers de webshop kunnen bereiken!
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "ALBDnsName"]]

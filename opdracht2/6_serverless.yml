@@ -1,0 +1,85 @@
+Description: Dit CloudFormation bestand maakt een Serverless Lambda functie die een mockup van een database in csv exporteert naar een S3 Bucket.
+
+Resources:
+  #======================================
+  # 1. S3 Bucket
+  #======================================
+  ExportBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "cloudshirt-order-exports-${AWS::AccountId}-${AWS::Region}"
+
+  #======================================
+  # 2. Serverless Lambda
+  #======================================
+  NightlyBackupFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CloudShirt-Nightly-Backup-And-Export
+      Handler: index.lambda_handler
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
+      Runtime: python3.9
+      Timeout: 60
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref ExportBucket
+      Code:
+        ZipFile: |
+          import boto3
+          import datetime
+          import os
+
+          def lambda_handler(event, context):
+            s3 = boto3.client('s3')
+            timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M')
+            bucket = os.environ['BUCKET_NAME']
+
+            print("Start Order Tabel Export naar S3...")
+
+            # Genereer de CSV-inhoud
+            csv_content = "OrderID,OrderDate,CustomerEmail,TotalAmount\n"
+            csv_content += f"1001,{timestamp},test@microsoft.com,59.95\n"
+            csv_content += f"1002,{timestamp},admin@cloudshirt.nl,120.00\n"
+
+            # Bepaal de bestandsnaam op basis van de huidige tijd
+            file_name = f"Order-Export-{timestamp}.csv"
+
+            # Upload het CSV bestand naar de S3 bucket
+            s3.put_object(
+              Bucket=bucket,
+              Key=file_name,
+              Body=csv_content,
+              ContentType='text/csv'
+            )
+
+            return {
+              'statusCode': 200,
+              'body': f'Succes! Bestand {file_name} is geëxporteerd naar S3 bucket: {bucket}.'
+            }
+
+  #======================================
+  # 3. De Tijdklok (EventBridge)
+  #======================================
+  NightlyBackupSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: Trigger-Nightly-Backup
+      Description: "Triggers the Backup and Export Lambda function every 1 minute"
+      ScheduleExpression: "rate(1 minute)"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt NightlyBackupFunction.Arn
+          Id: "TargetFunctionV1"
+
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref NightlyBackupFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt NightlyBackupSchedule.Arn
+
+Outputs:
+  S3BucketName:
+    Description: "De naam van de S3 Bucket waar de exports in staan"
+    Value: !Ref ExportBucket

@@ -1,0 +1,131 @@
+Description: Dit CloudFormation bestand maakt een MS SQL SERVER database en een EFS netwerkschijf aan in de private subnets.
+
+Parameters:
+  BaseStackName:
+    Description: Name of the foundational network stack to import values from
+    Type: String
+    Default: MyFundamentStack
+
+  #============================
+  # Database Parameters
+  #============================
+  DBUser:
+    Description: Master username for the database
+    Type: String
+    Default: adminAWS
+
+  DBPassword:
+    Description: Master password for the database
+    Type: String
+    NoEcho: true
+    Default: Komjenietin123
+
+Resources:
+  #======================================
+  # Database (RDS)
+  #======================================
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow MS SQL SERVER traffic from Web Servers only
+      VpcId:
+        Fn::ImportValue: !Sub "${BaseStackName}:VPC"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 1433
+          ToPort: 1433
+          SourceSecurityGroupId:
+            Fn::ImportValue: !Sub "${BaseStackName}:WebServerSecurityGroup"
+      Tags:
+        - Key: Name
+          Value: RDS-SECURITY-GROUP
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets for the RDS database
+      SubnetIds:
+        - Fn::ImportValue: !Sub "${BaseStackName}:AZ1PrivateSubnet"
+        - Fn::ImportValue: !Sub "${BaseStackName}:AZ2PrivateSubnet"
+      Tags:
+        - Key: Name
+          Value: DB-SUBNET-GROUP
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: sqlserver-ex
+      DBInstanceClass: db.t3.small
+      LicenseModel: license-included
+      AllocatedStorage: 20
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      PubliclyAccessible: false
+      MultiAZ: false # SQL Server Express ondersteunt geen MultiAZ in RDS
+      MonitoringInterval: 0
+      Tags:
+        - Key: Name
+          Value: DATABASE
+
+  #======================================
+  # Elastic File System (EFS)
+  #======================================
+
+  EFSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow NFS access from Web Servers
+      VpcId:
+        Fn::ImportValue: !Sub "${BaseStackName}:VPC"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId:
+            Fn::ImportValue: !Sub "${BaseStackName}:WebServerSecurityGroup"
+      Tags:
+        - Key: Name
+          Value: EFS-SECURITY-GROUP
+
+  MySharedDrive:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      FileSystemTags:
+        - Key: Name
+          Value: CLOUDSHIRT-SHARED-LOGS
+
+  MountTargetAZ1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref MySharedDrive
+      SubnetId:
+        Fn::ImportValue: !Sub "${BaseStackName}:AZ1PrivateSubnet"
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+  MountTargetAZ2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref MySharedDrive
+      SubnetId:
+        Fn::ImportValue: !Sub "${BaseStackName}:AZ2PrivateSubnet"
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+Outputs:
+  FileSystemIdRef:
+    Description: Reference to the shared EFS drive ID
+    Value: !Ref MySharedDrive
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", "FileSystemId"]]
+
+  DatabaseEndpointRef:
+    Description: Connection endpoint for the RDS Database
+    Value: !GetAtt RDSInstance.Endpoint.Address
+    Export:
+      Name: !Join [ ":", [ !Ref "AWS::StackName", "DatabaseEndpoint" ] ]
