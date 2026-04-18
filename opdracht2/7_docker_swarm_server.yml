@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Docker Buildserver (Swarm Manager) en AWS ECR Repository
+
+Parameters:
+  BaseStackName:
+    Type: String
+    Default: MyFundamentStack
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: vockey
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+Resources:
+  # 1. Jouw private Docker image repository
+  CloudShirtECR:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: cloudshirt-repo
+      EmptyOnDelete: true # Zorgt dat CloudFormation hem later kan verwijderen, zelfs als er images in staan
+
+  # 2. De Buildserver in het Private Subnet
+  BuildServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref LatestAmiId
+      KeyName: !Ref KeyName
+      IamInstanceProfile: LabInstanceProfile # <--- Cruciaal voor het Learner Lab!
+      SubnetId:
+        Fn::ImportValue: !Sub "${BaseStackName}:AZ1PrivateSubnet"
+      SecurityGroupIds:
+        - Fn::ImportValue: !Sub "${BaseStackName}:WebServerSecurityGroup"
+      Tags:
+        - Key: Name
+          Value: Buildserver-SwarmMaster
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Installeer Docker en Git
+          yum update -y
+          amazon-linux-extras install docker -y
+          yum install git -y
+          systemctl start docker
+          systemctl enable docker
+          usermod -a -G docker ec2-user
+
+          # Initialiseer de Docker Swarm (deze server wordt de Master)
+          docker swarm init
+          
+          # Haal het worker-token en manager-IP op, en bewaar in SSM Parameter Store
+          # zodat je AutoScaling groep werkers straks dit token kunnen ophalen en meedoen!
+          TOKEN=$(docker swarm join-token -q worker)
+          aws ssm put-parameter --name "/swarm/worker-token" --value "$TOKEN" --type "String" --overwrite --region ${AWS::Region}
+          
+          IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+          aws ssm put-parameter --name "/swarm/manager-ip" --value "$IP" --type "String" --overwrite --region ${AWS::Region}
+
+Outputs:
+  ECRRepositoryUri:
+    Description: De URI van je Docker Repository
+    Value: !GetAtt CloudShirtECR.RepositoryUri

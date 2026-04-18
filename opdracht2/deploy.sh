@@ -8,7 +8,7 @@ echo "Start met de uitrol van de Infrastructuur..."
 # ==========================================
 # 1. Fundament Stack (Netwerk & Security)
 # ==========================================
-echo "1/6 Deploying Fundament Stack..."
+echo "1/7 Deploying Fundament Stack..."
 aws cloudformation deploy \
   --stack-name MyFundamentStack \
   --template-file 1_fundaments.yml
@@ -16,7 +16,7 @@ aws cloudformation deploy \
 # ==========================================
 # 2. Data & Storage Stack (RDS & EFS)
 # ==========================================
-echo "2/6 Deploying Data & Storage Stack..."
+echo "2/7 Deploying Data & Storage Stack..."
 aws cloudformation deploy \
   --stack-name MyStorageStack \
   --template-file 2_data\&storage.yml \
@@ -25,7 +25,7 @@ aws cloudformation deploy \
 # ==========================================
 # 3. Application Stack (Load Balancer & Launch Template)
 # ==========================================
-echo "3/6 Deploying Application Stack..."
+echo "3/7 Deploying Application Stack..."
 aws cloudformation deploy \
   --stack-name MyAppStack \
   --template-file 3_application\&loadbalancer.yml \
@@ -43,7 +43,7 @@ aws cloudformation deploy \
 # ==========================================
 # 5. ELK Stack (Monitoring)
 # ==========================================
-echo "5/6 Deploying Monitoring Stack..."
+echo "5/7 Deploying Monitoring Stack..."
 aws cloudformation deploy \
   --stack-name MyMonitoringStack \
   --template-file 5_monitoring.yml \
@@ -52,10 +52,19 @@ aws cloudformation deploy \
 # ==========================================
 # 6. Serverless Stack (Lambda)
 # ==========================================
-echo "6/6 Deploying Serverless Stack (Lambda)..."
+echo "6/7 Deploying Serverless Stack (Lambda)..."
 aws cloudformation deploy \
   --stack-name MyServerlessStack \
   --template-file 6_serverless.yml \
+  --capabilities CAPABILITY_NAMED_IAM
+
+# ==========================================
+# 7. Buildserver
+# ==========================================
+echo "7/7 Deploying Buildserver & ECR (Docker) stack..."
+aws cloudformation deploy \
+  --template-file 7_docker_buildserver.yml \
+  --stack-name MyBuildServerStack \
   --capabilities CAPABILITY_NAMED_IAM
 
 echo "Alle stacks zijn succesvol uitgerold!!!"

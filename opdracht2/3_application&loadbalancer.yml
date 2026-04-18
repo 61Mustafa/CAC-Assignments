@@ -84,6 +84,8 @@ Resources:
         ImageId: !Ref LatestAmiId
         InstanceType: t2.micro # Graties tier
         KeyName: !Ref KeyName
+        IamInstanceProfile:
+          Name: LabInstanceProfile
         SecurityGroupIds:
           - Fn::ImportValue: !Sub "${BaseStackName}:WebServerSecurityGroup"
 

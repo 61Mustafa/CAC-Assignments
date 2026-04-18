@@ -225,7 +225,7 @@ Resources:
       GroupDescription: Sta HTTP uitsluitend toe via de ALB, en sta SSH toegang toe voor beheer.
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - IpProtocol: tcp
+        - IpProtocol: -1
           FromPort: 80
           ToPort: 80
           SourceSecurityGroupId: !Ref ALBSecurityGroup # Alleen verkeer dat al door de Load Balancer firewall is gekomen mag door.
