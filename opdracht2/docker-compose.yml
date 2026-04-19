@@ -1,0 +1,34 @@
+# Specificeert de versie van de Docker Compose syntax. Versie 3.8 is geschikt voor Docker Swarm.
+version: '3.8'
+
+# Hier definiëren we alle diensten (containers) die onze applicatie nodig heeft.
+services:
+  # De naam van onze webapplicatie service
+  cloudshirt-web:
+    # Geeft aan welke Docker image gebruikt moet worden. De variabelen (${...})
+    # worden straks door onze server automatisch ingevuld met het ECR adres.
+    image: ${DOCKER_REGISTRY_URL}/cloudshirt-web:latest
+
+    # Hiermee koppelen we poorten van de server aan de container
+    ports:
+      # Koppel poort 80 van de EC2 server (links) aan poort 80 binnen de container (rechts).
+      - "80:80"
+
+    # Hier stellen we omgevingsvariabelen in die IN de container beschikbaar zijn
+    environment:
+      # Vertelt de .NET applicatie dat hij in de 'Production' modus moet draaien (i.p.v. Development)
+      - ASPNETCORE_ENVIRONMENT=Production
+      # Geeft de database connectiestring door aan de applicatie, zodat deze kan praten met jouw RDS database.
+      # Ook hier gebruiken we ${...} variabelen die later dynamisch worden ingevuld.
+      - ConnectionStrings__CatalogConnection=Server=${RDS_ENDPOINT};Database=CloudShirtDb;User Id=admin;Password=${RDS_PASSWORD};
+
+    # Configuratie specifiek voor het Docker Swarm cluster
+    deploy:
+      # 'replicated' betekent dat we een specifiek aantal identieke containers willen draaien
+      mode: replicated
+      # Hoeveel kopieën (containers) we in totaal over het hele cluster willen verdelen
+      replicas: 3
+      # Bepaalt wat de Swarm moet doen als de container onverwacht stopt
+      restart_policy:
+        # 'on-failure' betekent: start de container opnieuw op als hij crasht (een foutmelding geeft)
+        condition: on-failure
