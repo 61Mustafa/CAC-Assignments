@@ -73,7 +73,7 @@ Resources:
           TargetGroupArn: !Ref TargetGroup
 
   #======================================
-  # Launch Template
+  # Launch Template (De Instructies voor de Werkers)
   #======================================
 
   WebAppLaunchTemplate:
@@ -82,7 +82,7 @@ Resources:
       LaunchTemplateName: CloudShirt-LaunchTemplate
       LaunchTemplateData:
         ImageId: !Ref LatestAmiId
-        InstanceType: t2.micro # Graties tier
+        InstanceType: t2.micro
         KeyName: !Ref KeyName
         IamInstanceProfile:
           Name: LabInstanceProfile
@@ -93,45 +93,56 @@ Resources:
           Fn::Base64: !Sub
             - |
               #!/bin/bash
-              # 1. Updates en tools (inclusief .NET 6 SDK)
+              # 1. STANDAARD INSTALLATIES (Docker & EFS)
               yum update -y
-              rpm -Uvh https://packages.microsoft.com/config/centos/7/packages-microsoft-prod.rpm
-              yum install -y git jq amazon-efs-utils dotnet-sdk-6.0
+              amazon-linux-extras install docker -y
+              yum install -y jq amazon-efs-utils jq curl
+              
+              systemctl start docker
+              systemctl enable docker
+              usermod -a -G docker ec2-user
 
-              # 2. EFS Aankoppelen (Logs)
+              # 2. EFS Aankoppelen (Voor logfiles - REQ-03)
               mkdir -p /var/log/cloudshirt
               mount -t efs -o tls ${EfsId}:/ /var/log/cloudshirt
               echo "${EfsId}:/ /var/log/cloudshirt efs defaults,_netdev 0 0" >> /etc/fstab
 
-              # 3. CloudShirt ophalen van de github repo
-              cd /home/ec2-user
-              git clone https://github.com/looking4ward/CloudShirt.git
+              # 3. WACHTEN OP DE BAAS (SSM Parameters)
+              # De Auto Scaling Group is vaak sneller dan de Buildserver. 
+              # We wachten tot de Buildserver zijn "Worker Token" in SSM heeft gezet.
+              REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .region)
               
-              # 4. Database connectie instellen met de SED commando's
-              sed -i "s/Server.*CatalogDb;/Server=${DatabaseEndpoint},1433;User ID=${DBUser};Password=${DBPassword};Initial Catalog=Microsoft.eShopOnWeb.CatalogDb;/" /home/ec2-user/CloudShirt/src/Web/appsettings.json
-              sed -i "s/Server.*Identity;/Server=${DatabaseEndpoint},1433;User ID=${DBUser};Password=${DBPassword};Initial Catalog=Microsoft.eShopOnWeb.Identity;/" /home/ec2-user/CloudShirt/src/Web/appsettings.json
+              while true; do
+                TOKEN=$(aws ssm get-parameter --name "/swarm/worker-token" --query "Parameter.Value" --output text --region $REGION 2>/dev/null)
+                if [ $? -eq 0 ]; then
+                  break
+                fi
+                echo "Wachten op de Swarm Master..."
+                sleep 10
+              done
+              
+              # Haal de rest van de gegevens op
+              MANAGER_IP=$(aws ssm get-parameter --name "/swarm/manager-ip" --query "Parameter.Value" --output text --region $REGION)
+              ECR_URL=$(aws ssm get-parameter --name "/swarm/ecr-url" --query "Parameter.Value" --output text --region $REGION)
 
-              # 5. Publiceren
-              export HOME=/home/ec2-user
-              export DOTNET_CLI_HOME=/home/ec2-user
-              cd /home/ec2-user/CloudShirt/src/Web
-              dotnet publish -c Release -o /home/ec2-user/release
+              # 4. INLOGGEN IN HET MAGAZIJN (ECR)
+              ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+              aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
+
+              # 5. MELDEN BIJ DE BAAS (Swarm Worker - REQ-14)
+              docker swarm join --token $TOKEN $MANAGER_IP:2377
               
-              # 6. Opstarten vanuit de release folder en logs naar EFS sturen
-              cd /home/ec2-user/release
-              nohup dotnet Web.dll --urls http://0.0.0.0:80 > /var/log/cloudshirt/webapp.log 2>&1 &
+              # En dat is het! De server is nu onderdeel van het cluster.
+              # De Swarm Master (Buildserver) deelt via docker-compose de containers uit aan deze werker.
+
             - EfsId:
                 Fn::ImportValue: !Sub "${StorageStackName}:FileSystemId"
-              DatabaseEndpoint:
-                Fn::ImportValue: !Sub "${StorageStackName}:DatabaseEndpoint"
-              DBUser: adminAWS
-              DBPassword: Komjenietin123
 
         TagSpecifications:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: CloudShirt-WebServer
+                Value: CloudShirt-SwarmWorker
 
 Outputs:
   LaunchTemplateIdRef:
