@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Docker Buildserver (Swarm Manager) en AWS ECR Repository
+Description: Docker Buildserver (Swarm Manager), AWS ECR Repository en Nightly Builds
 
 Parameters:
   BaseStackName:
@@ -13,21 +13,25 @@ Parameters:
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
 Resources:
-  # 1. Jouw private Docker image repository
+  # ==========================================
+  # HET MAGAZIJN (REQ-12)
+  # ==========================================
   CloudShirtECR:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: cloudshirt-repo
-      EmptyOnDelete: true # Zorgt dat CloudFormation hem later kan verwijderen, zelfs als er images in staan
+      EmptyOnDelete: true # Heel fijn: je kunt de stack verwijderen zonder eerst handmatig images te deleten.
 
-  # 2. De Buildserver in het Private Subnet
+  # ==========================================
+  # DE FABRIEK & DE BAAS (REQ-09)
+  # ==========================================
   BuildServer:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t2.micro
       ImageId: !Ref LatestAmiId
       KeyName: !Ref KeyName
-      IamInstanceProfile: LabInstanceProfile # <--- Cruciaal voor het Learner Lab!
+      IamInstanceProfile: LabInstanceProfile # Geeft de server rechten om ECR te pushen en SSM te lezen/schrijven
       SubnetId:
         Fn::ImportValue: !Sub "${BaseStackName}:AZ1PrivateSubnet"
       SecurityGroupIds:
@@ -38,26 +42,81 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          # Installeer Docker en Git
+          # 1. STANDAARD INSTALLATIES
           yum update -y
           amazon-linux-extras install docker -y
-          yum install git -y
+          yum install git jq -y
           systemctl start docker
           systemctl enable docker
           usermod -a -G docker ec2-user
 
-          # Initialiseer de Docker Swarm (deze server wordt de Master)
+          # ---------------------------------------------------------
+          # DE BAAS (SWARM MANAGER - REQ-13)
+          # ---------------------------------------------------------
+          # Initialiseer de Docker Swarm. Deze server is nu de baas.
           docker swarm init
           
-          # Haal het worker-token en manager-IP op, en bewaar in SSM Parameter Store
-          # zodat je AutoScaling groep werkers straks dit token kunnen ophalen en meedoen!
+          # Haal het geheime "worker-token" op en het IP van deze manager
           TOKEN=$(docker swarm join-token -q worker)
-          aws ssm put-parameter --name "/swarm/worker-token" --value "$TOKEN" --type "String" --overwrite --region ${AWS::Region}
-          
           IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+          
+          # Sla dit veilig op in AWS Systems Manager (SSM) Parameter Store.
+          # Straks halen de Worker servers (in stap 4) dit op om zich bij de baas te melden!
+          aws ssm put-parameter --name "/swarm/worker-token" --value "$TOKEN" --type "String" --overwrite --region ${AWS::Region}
           aws ssm put-parameter --name "/swarm/manager-ip" --value "$IP" --type "String" --overwrite --region ${AWS::Region}
+          aws ssm put-parameter --name "/swarm/ecr-url" --value "${CloudShirtECR.RepositoryUri}" --type "String" --overwrite --region ${AWS::Region}
+
+          # ---------------------------------------------------------
+          # DE FABRIEK (NIGHTLY BUILDS - REQ-11 & REQ-12)
+          # ---------------------------------------------------------
+          cat << 'EOF' > /opt/build_and_push.sh
+          #!/bin/bash
+          # Dit is het script dat elke nacht draait!
+          
+          cd /tmp
+          rm -rf CloudShirt CAC-Assignments
+          
+          # A. Haal de applicatie broncode op (nodig om de C# code te kunnen compileren)
+          git clone https://github.com/looking4ward/CloudShirt.git
+          
+          # B. Haal JOUW repository op met JOUW Dockerfile en JOUW docker-compose.yml
+          git clone https://github.com/61Mustafa/CAC-Assignments.git
+          
+          # C. Kopieer JOUW Dockerfile naar de root van de applicatie
+          cp CAC-Assignments/opdracht2/Dockerfile CloudShirt/Dockerfile
+          
+          cd CloudShirt
+          
+          # D. Bouw de image. We gebruiken nu JOUW DOCKERFILE! (REQ-08)
+          docker build --pull -t cloudshirt-web:latest -f Dockerfile .
+          
+          # E. Log in bij ons ECR Magazijn (REQ-12)
+          REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .region)
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
+          
+          # F. Geef de lokale image de officiële ECR naam
+          ECR_URL=$(aws ssm get-parameter --name "/swarm/ecr-url" --query "Parameter.Value" --output text --region $REGION)
+          docker tag cloudshirt-web:latest $ECR_URL:latest
+          
+          # G. Push de image veilig naar het ECR Magazijn
+          docker push $ECR_URL:latest
+          EOF
+          
+          # Maak het script uitvoerbaar
+          chmod +x /opt/build_and_push.sh
+          
+          # Voer de Nightly Build direct één keer uit tijdens het opstarten
+          /opt/build_and_push.sh
+          
+          # ---------------------------------------------------------
+          # DE WEKKER (CRONJOB - REQ-11)
+          # ---------------------------------------------------------
+          # Stel in dat het script elke nacht om 03:00 uur (0 3 * * *) automatisch runt.
+          echo "0 3 * * * root /opt/build_and_push.sh >> /var/log/nightly_build.log 2>&1" > /etc/cron.d/nightly_docker_build
+          chmod 644 /etc/cron.d/nightly_docker_build
 
 Outputs:
   ECRRepositoryUri:
-    Description: De URI van je Docker Repository
+    Description: De URI van je Docker Repository (Het Magazijn)
     Value: !GetAtt CloudShirtECR.RepositoryUri
