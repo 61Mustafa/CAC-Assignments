@@ -225,10 +225,10 @@ Resources:
       GroupDescription: Sta HTTP uitsluitend toe via de ALB, en sta SSH toegang toe voor beheer.
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - IpProtocol: -1
+        - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref ALBSecurityGroup # Alleen verkeer dat al door de Load Balancer firewall is gekomen mag door.
+          SourceSecurityGroupId: !Ref ALBSecurityGroup #Alleen verkeer dat al door de Load Balancer firewall is gekomen mag door.
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
@@ -236,6 +236,13 @@ Resources:
       Tags:
         - Key: Name
           Value: WEBSERVER-SECURITY-GROUP
+
+  WebServerSecurityGroupSelfIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref WebServerSecurityGroup
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref WebServerSecurityGroup
 
 #============================
 # Outputs
