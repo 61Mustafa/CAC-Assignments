@@ -63,16 +63,17 @@ aws cloudformation deploy \
 # ==========================================
 echo "7/7 Deploying Buildserver & ECR (Docker) stack..."
 aws cloudformation deploy \
-  --template-file 7_docker_buildserver.yml \
+  --template-file 7_docker_swarm_server.yml \
   --stack-name MyBuildServerStack \
   --capabilities CAPABILITY_NAMED_IAM
 
 echo "Alle stacks zijn succesvol uitgerold!!!"
 
-# Haal de DNS naam (URL) van de Load Balancer,Kibana en S3 bucket
+# Haal de DNS naam (URL) van de Load Balancer, Kibana, S3 bucket en Docker repo op
 ALB_URL=$(aws cloudformation describe-stacks --stack-name MyAppStack --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDnsName'].OutputValue" --output text)
 KIBANA_URL=$(aws cloudformation describe-stacks --stack-name MyMonitoringStack --query "Stacks[0].Outputs[?OutputKey=='KibanaUrl'].OutputValue" --output text)
 S3_BUCKET=$(aws cloudformation describe-stacks --stack-name MyServerlessStack --query "Stacks[0].Outputs[?OutputKey=='S3BucketName'].OutputValue" --output text)
+DOCKER_REPO_URL=$(aws cloudformation describe-stacks --stack-name MyBuildServerStack --query "Stacks[0].Outputs[?OutputKey=='ECRRepositoryUri'].OutputValue" --output text)
 
 echo "De applicatie is bereikbaar op:"
 echo "http://$ALB_URL"
@@ -80,3 +81,5 @@ echo "Kibana Dashboard is bereikbaar op:"
 echo "$KIBANA_URL"
 echo "S3 Bucket voor Order exports:"
 echo "s3://$S3_BUCKET"
+echo "Docker repository is bereikbaar op:"
+echo "$DOCKER_REPO_URL"
