@@ -12,7 +12,7 @@ services:
     # Hiermee koppelen we poorten van de server aan de container
     ports:
       # Koppel poort 80 van de EC2 server (links) aan poort 80 binnen de container (rechts).
-      - "80:80"
+      - "80:5106"
 
     # Hier stellen we omgevingsvariabelen in die IN de container beschikbaar zijn
     environment:
