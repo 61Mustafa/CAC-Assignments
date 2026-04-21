@@ -131,9 +131,20 @@ Resources:
 
               # 5. MELDEN BIJ DE BAAS (Swarm Worker - REQ-14)
               docker swarm join --token $TOKEN $MANAGER_IP:2377
-              
-              # En dat is het! De server is nu onderdeel van het cluster.
-              # De Swarm Master (Buildserver) deelt via docker-compose de containers uit aan deze werker.
+
+              # 6. ECR LOGIN VERNIEUWEN (elke 6 uur, token verloopt na 12 uur)
+              cat << 'CRON_ECR' > /etc/cron.d/ecr_login_refresh
+              0 */6 * * * root REGION=$(curl -sq http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .region) && aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $(aws sts get-caller-identity --query Account --output text).dkr.ecr.$REGION.amazonaws.com >> /var/log/ecr_refresh.log 2>&1
+              CRON_ECR
+              chmod 644 /etc/cron.d/ecr_login_refresh
+
+              # 7. AUTOMATISCH HERJOINEN ALS DE SWARM MANAGER VERVANGEN WORDT
+              # Controleert elke minuut of deze node nog actief in de Swarm zit.
+              # Als de Buildserver vervangen is, haalt hij de nieuwe token op uit SSM en herjoined.
+              cat << 'CRON_SWARM' > /etc/cron.d/swarm_rejoin
+              * * * * * root REGION=$(curl -sq http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .region) && docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null | grep -q "active" || (docker swarm leave --force 2>/dev/null; TOKEN=$(aws ssm get-parameter --name "/swarm/worker-token" --query "Parameter.Value" --output text --region $REGION); MANAGER_IP=$(aws ssm get-parameter --name "/swarm/manager-ip" --query "Parameter.Value" --output text --region $REGION); docker swarm join --token $TOKEN $MANAGER_IP:2377) >> /var/log/swarm_rejoin.log 2>&1
+              CRON_SWARM
+              chmod 644 /etc/cron.d/swarm_rejoin
 
             - EfsId:
                 Fn::ImportValue: !Sub "${StorageStackName}:FileSystemId"

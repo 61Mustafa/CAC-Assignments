@@ -65,7 +65,8 @@ echo "7/7 Deploying Buildserver & ECR (Docker) stack..."
 aws cloudformation deploy \
   --template-file 7_docker_swarm_server.yml \
   --stack-name MyBuildServerStack \
-  --capabilities CAPABILITY_NAMED_IAM
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides BaseStackName=MyFundamentStack StorageStackName=MyStorageStack
 
 echo "Alle stacks zijn succesvol uitgerold!!!"
 
