@@ -12,7 +12,7 @@ services:
     # Hiermee koppelen we poorten van de server aan de container
     ports:
       # Koppel poort 80 van de EC2 server (links) aan poort 80 binnen de container (rechts).
-      - "80:5106"
+      - "80:80"
 
     # Hier stellen we omgevingsvariabelen in die IN de container beschikbaar zijn
     environment:
@@ -20,7 +20,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       # Geeft de database connectiestring door aan de applicatie, zodat deze kan praten met jouw RDS database.
       # Ook hier gebruiken we ${...} variabelen die later dynamisch worden ingevuld.
-      - ConnectionStrings__CatalogConnection=Server=${RDS_ENDPOINT};Database=CloudShirtDb;User Id=admin;Password=${RDS_PASSWORD};
+      - ConnectionStrings__CatalogConnection=Server=${RDS_ENDPOINT};Database=CloudShirtDb;User Id=${RDS_USERNAME};Password=${RDS_PASSWORD};
 
     # Configuratie specifiek voor het Docker Swarm cluster
     deploy:
