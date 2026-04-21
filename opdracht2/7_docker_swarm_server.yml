@@ -99,9 +99,10 @@ Resources:
             sed -i "s|image: .*|image: $ECR_URL:latest|g" docker-compose.yml
             
             # We zetten de variabelen klaar voor de database verbinding
-            export RDS_ENDPOINT=${DatabaseEndpoint}
+            # RDS hostname omzetten naar IP om DNS-problemen in Swarm overlay netwerk te omzeilen
+            export RDS_ENDPOINT=$(python3 -c "import socket; print(socket.gethostbyname('${DatabaseEndpoint}'))")
             export RDS_PASSWORD=Komjenietin123
-              export RDS_USERNAME=adminAWS
+            export RDS_USERNAME=adminAWS
             
             # De Baas roept over de werkvloer: Deploy de applicatie!
             docker stack deploy -c docker-compose.yml cloudshirt

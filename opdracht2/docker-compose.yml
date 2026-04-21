@@ -22,6 +22,10 @@ services:
       # Ook hier gebruiken we ${...} variabelen die later dynamisch worden ingevuld.
       - ConnectionStrings__CatalogConnection=Server=${RDS_ENDPOINT};Database=CloudShirtDb;User Id=${RDS_USERNAME};Password=${RDS_PASSWORD};
 
+    # Gebruik de VPC DNS resolver zodat AWS-hostnames (RDS, ECR) resolved kunnen worden vanuit de container
+    dns:
+      - 10.0.0.2
+
     # Configuratie specifiek voor het Docker Swarm cluster
     deploy:
       # 'replicated' betekent dat we een specifiek aantal identieke containers willen draaien
