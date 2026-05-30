@@ -49,7 +49,7 @@ Resources:
             # 1. STANDAARD INSTALLATIES
             yum update -y
             amazon-linux-extras install docker -y
-            yum install git jq -y
+            yum install git jq python3 -y
             systemctl start docker
             systemctl enable docker
             usermod -a -G docker ec2-user
@@ -105,7 +105,7 @@ Resources:
             export RDS_USERNAME=adminAWS
             
             # De Baas roept over de werkvloer: Deploy de applicatie!
-            docker stack deploy -c docker-compose.yml cloudshirt
+            docker stack deploy --with-registry-auth -c docker-compose.yml cloudshirt
             EOF
             
             chmod +x /opt/build_and_push.sh
