@@ -20,7 +20,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       # Geeft de database connectiestring door aan de applicatie, zodat deze kan praten met jouw RDS database.
       # Ook hier gebruiken we ${...} variabelen die later dynamisch worden ingevuld.
-      - ConnectionStrings__CatalogConnection=Server=${RDS_ENDPOINT};Database=CloudShirtDb;User Id=${RDS_USERNAME};Password=${RDS_PASSWORD};
+      - ConnectionStrings__CatalogConnection=Server=${RDS_ENDPOINT};Database=CloudShirtDb;User Id=${RDS_USERNAME};Password=${RDS_PASSWORD};TrustServerCertificate=True;
       - ConnectionStrings__IdentityConnection=Server=${RDS_ENDPOINT};Database=CloudShirtDb;User Id=${RDS_USERNAME};Password=${RDS_PASSWORD};TrustServerCertificate=True;
 
 
