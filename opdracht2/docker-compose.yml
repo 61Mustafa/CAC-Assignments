@@ -21,6 +21,8 @@ services:
       # Geeft de database connectiestring door aan de applicatie, zodat deze kan praten met jouw RDS database.
       # Ook hier gebruiken we ${...} variabelen die later dynamisch worden ingevuld.
       - ConnectionStrings__CatalogConnection=Server=${RDS_ENDPOINT};Database=CloudShirtDb;User Id=${RDS_USERNAME};Password=${RDS_PASSWORD};
+      - ConnectionStrings__IdentityConnection=Server=${RDS_ENDPOINT};Database=CloudShirtDb;User Id=${RDS_USERNAME};Password=${RDS_PASSWORD};TrustServerCertificate=True;
+
 
     # Gebruik de VPC DNS resolver zodat AWS-hostnames (RDS, ECR) resolved kunnen worden vanuit de container
     dns:
