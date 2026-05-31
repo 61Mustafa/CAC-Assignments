@@ -10,6 +10,11 @@ output "vpc_id" {
   value       = aws_vpc.main.id
 }
 
+output "aws_region" {
+  description = "De AWS regio"
+  value       = var.aws_region
+}
+
 output "az1_private_subnet_id" {
   description = "Verwijzing naar het private subnet in AZ1"
   value       = aws_subnet.az1_private.id

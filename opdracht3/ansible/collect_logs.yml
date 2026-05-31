@@ -1,0 +1,50 @@
+---
+- name: Verzamel de logfiles van de CloudShirt website (REQ-22)
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - group_vars/all.yml
+
+  tasks:
+    - name: Koppel aan het EKS cluster
+      ansible.builtin.command: >
+        aws eks update-kubeconfig
+        --name {{ cluster_name }}
+        --region {{ aws_region }}
+      changed_when: false
+
+    - name: Maak een lokale map voor de logs
+      ansible.builtin.file:
+        path: "{{ logs_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Zoek alle pods van de webapplicatie
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: default
+        label_selectors:
+          - app=cloudshirt-web
+      register: pods
+
+    - name: Haal de logs op per pod
+      kubernetes.core.k8s_log:
+        kind: Pod
+        namespace: default
+        name: "{{ item.metadata.name }}"
+      register: pod_logs
+      loop: "{{ pods.resources }}"
+      loop_control:
+        label: "{{ item.metadata.name }}"
+
+    - name: Schrijf elke pod-log naar een eigen bestand
+      ansible.builtin.copy:
+        content: "{{ item.log }}"
+        dest: "{{ logs_dir }}/{{ item.item.metadata.name }}.log"
+      loop: "{{ pod_logs.results }}"
+      loop_control:
+        label: "{{ item.item.metadata.name }}"
+
+    - name: Overzicht
+      ansible.builtin.debug:
+        msg: "Logs van {{ pods.resources | length }} pods opgeslagen in {{ logs_dir }}"

@@ -1,0 +1,35 @@
+---
+- name: Verwijder de CloudShirt applicatie van het cluster
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - group_vars/all.yml
+
+  tasks:
+    - name: Koppel aan het EKS cluster
+      ansible.builtin.command: >
+        aws eks update-kubeconfig
+        --name {{ cluster_name }}
+        --region {{ aws_region }}
+      changed_when: false
+
+    - name: Verwijder de Service (en daarmee de AWS LoadBalancer)
+      kubernetes.core.k8s:
+        state: absent
+        kind: Service
+        name: cloudshirt-web
+        namespace: default
+
+    - name: Verwijder de Deployment
+      kubernetes.core.k8s:
+        state: absent
+        kind: Deployment
+        name: cloudshirt-web
+        namespace: default
+
+    - name: Verwijder de Secret
+      kubernetes.core.k8s:
+        state: absent
+        kind: Secret
+        name: cloudshirt-secrets
+        namespace: default

@@ -1,15 +1,72 @@
-- name: Configureer Kubernetes Cluster
+---
+- name: Configureer het EKS cluster en deploy de CloudShirt applicatie (REQ-21)
   hosts: localhost
-  connection: local
-  tasks:
-    - name: Zorg dat de Kubernetes Deployment aanwezig is
-      kubernetes.core.k8s:
-        state: present
-        definition: "{{ lookup('template', '../k8s/deployment.yaml') }}"
-        namespace: default
+  gather_facts: false
+  vars_files:
+    - group_vars/all.yml
 
-    - name: Zorg dat de Kubernetes Service aanwezig is
+  tasks:
+    - name: Haal de Terraform outputs op (ECR URL en RDS endpoint)
+      ansible.builtin.command: terraform output -json
+      args:
+        chdir: "{{ terraform_dir }}"
+      register: tf_output
+      changed_when: false
+
+    - name: Zet de outputs om naar variabelen
+      ansible.builtin.set_fact:
+        ecr_url: "{{ (tf_output.stdout | from_json).ecr_repository_url.value }}"
+        rds_endpoint: "{{ (tf_output.stdout | from_json).database_endpoint.value }}"
+
+    - name: Koppel Ansible/kubectl aan het EKS cluster (kubeconfig ophalen)
+      ansible.builtin.command: >
+        aws eks update-kubeconfig
+        --name {{ cluster_name }}
+        --region {{ aws_region }}
+      changed_when: false
+
+    - name: Maak een map voor de gerenderde manifests
+      ansible.builtin.file:
+        path: "{{ rendered_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Render de Kubernetes manifests (vul ECR URL en RDS endpoint in)
+      ansible.builtin.template:
+        src: "{{ k8s_dir }}/{{ item }}"
+        dest: "{{ rendered_dir }}/{{ item }}"
+      loop:
+        - secret.yaml
+        - deployment.yaml
+        - service.yaml
+
+    - name: Pas de Secret toe
       kubernetes.core.k8s:
         state: present
-        src: ../k8s/service.yaml
+        src: "{{ rendered_dir }}/secret.yaml"
+
+    - name: Pas de Deployment toe (5 replicas) en wacht tot hij klaar is
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ rendered_dir }}/deployment.yaml"
+        wait: true
+        wait_timeout: 300
+
+    - name: Pas de Service toe (LoadBalancer = 1 extern adres, REQ-17)
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ rendered_dir }}/service.yaml"
+
+    - name: Wacht tot de LoadBalancer een extern adres heeft
+      kubernetes.core.k8s_info:
+        kind: Service
+        name: cloudshirt-web
         namespace: default
+      register: svc
+      until: svc.resources[0].status.loadBalancer.ingress is defined
+      retries: 30
+      delay: 10
+
+    - name: Toon de externe URL van de applicatie
+      ansible.builtin.debug:
+        msg: "De applicatie is bereikbaar op: http://{{ svc.resources[0].status.loadBalancer.ingress[0].hostname }}"

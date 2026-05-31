@@ -3,26 +3,46 @@ kind: Deployment
 metadata:
   name: cloudshirt-web
   labels:
-    app: cloudshirt
+    app: cloudshirt-web
 spec:
   replicas: 5
   selector:
     matchLabels:
-      app: cloudshirt
+      app: cloudshirt-web
   template:
     metadata:
       labels:
-        app: cloudshirt
+        app: cloudshirt-web
     spec:
       containers:
-      - name: cloudshirt-web
-        image: "{{ ecr_repository_url }}:latest"
-        ports:
-        - containerPort: 80
-        env:
-        - name: ASPNETCORE_ENVIRONMENT
-          value: Production
-        - name: ConnectionStrings__CatalogConnection
-          value: "Server={{ rds_endpoint }};Database=CloudShirtDb;User Id=adminAWS;Password=Komjenietin123;TrustServerCertificate=True;"
-        - name: ConnectionStrings__IdentityConnection
-          value: "Server={{ rds_endpoint }};Database=CloudShirtDb;User Id=adminAWS;Password=Komjenietin123;TrustServerCertificate=True;"
+        - name: cloudshirt-web
+          image: {{ ecr_url }}:latest
+          ports:
+              - containerPort: 80
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Production"
+            # De connection strings komen uit de Secret (cloudshirt-secrets).
+            - name: ConnectionStrings__CatalogConnection
+              valueFrom:
+                secretKeyRef:
+                  name: cloudshirt-secrets
+                  key: CatalogConnection
+            - name: ConnectionStrings__IdentityConnection
+              valueFrom:
+                secretKeyRef:
+                  name: cloudshirt-secrets
+                  key: IdentityConnection
+          # Zorgt dat de load balancer alleen verkeer stuurt naar pods die echt klaar zijn.
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 20
