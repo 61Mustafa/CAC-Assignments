@@ -1,18 +1,45 @@
 #!/bin/bash
+
+# Stop het script direct als er een commando faalt
 set -e
 
 # Kleuren voor output
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}Stap 1: Voorbereiden van de omgeving...${NC}"
-# Installeer Ansible, Kubernetes dependencies en de Kubernetes collection
-pip3 install --user ansible kubernetes > /dev/null 2>&1
-ansible-galaxy collection install kubernetes.core > /dev/null 2>&1
+echo -e "${GREEN}Start met de uitrol van Opdracht 3 (Terraform, K8s, Ansible)...${NC}"
 
-echo -e "${GREEN}Stap 2: Terraform infrastructure uitrollen...${NC}"
+# ==========================================
+# 1. Omgeving voorbereiden
+# ==========================================
+echo -e "${YELLOW}1/4 Omgeving voorbereiden...${NC}"
+
+# Zorg dat ~/.local/bin in PATH staat voor Ansible
+export PATH=$PATH:$HOME/.local/bin
+
+# Controleer of dependencies aanwezig zijn, installeer indien nodig
+if ! command -v ansible &> /dev/null; then
+    echo "Ansible niet gevonden. Installeren..."
+    pip3 install --user ansible kubernetes
+else
+    echo "Ansible is al geïnstalleerd."
+fi
+
+echo "Installeren van Kubernetes collection voor Ansible..."
+ansible-galaxy collection install kubernetes.core --force
+
+# ==========================================
+# 2. Terraform (Infrastructuur)
+# ==========================================
+echo -e "${YELLOW}2/4 Terraform infrastructure uitrollen (dit kan 15-20 min duren)...${NC}"
 cd terraform
+
+echo "Initialiseren..."
 terraform init
+
+echo "Toepassen van wijzigingen..."
 terraform apply -auto-approve
 
 # Haal de benodigde outputs op
@@ -23,14 +50,28 @@ REGION=$(terraform output -raw aws_region)
 
 cd ..
 
-echo -e "${GREEN}Stap 3: Kubeconfig bijwerken voor EKS...${NC}"
-aws eks update-kubeconfig --name $CLUSTER_NAME --region $REGION
+# ==========================================
+# 3. Kubeconfig bijwerken
+# ==========================================
+echo -e "${YELLOW}3/4 Kubeconfig bijwerken voor EKS cluster: $CLUSTER_NAME...${NC}"
+aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$REGION"
 
-echo -e "${GREEN}Stap 4: Kubernetes cluster configureren met Ansible...${NC}"
+# ==========================================
+# 4. Ansible (Configuratie)
+# ==========================================
+echo -e "${YELLOW}4/4 Kubernetes cluster configureren met Ansible...${NC}"
 cd ansible
+
 # Voer het playbook uit met de variabelen uit Terraform
 ansible-playbook configure_cluster.yml -e "ecr_repository_url=$ECR_URL rds_endpoint=$RDS_ENDPOINT"
 
-echo -e "${GREEN}Klaar! De applicatie is uitgerold.${NC}"
-echo -e "Je kunt de status van de pods bekijken met: ${GREEN}kubectl get pods${NC}"
-echo -e "Je kunt het externe IP-adres vinden met: ${GREEN}kubectl get svc cloudshirt-service${NC}"
+cd ..
+
+echo -e "${GREEN}==========================================${NC}"
+echo -e "${GREEN}Alle resources zijn succesvol uitgerold!!!${NC}"
+echo -e "${GREEN}==========================================${NC}"
+echo -e "De applicatie is bereikbaar via de LoadBalancer."
+echo -e "Status van de pods: ${YELLOW}kubectl get pods${NC}"
+echo -e "Extern IP-adres: ${YELLOW}kubectl get svc cloudshirt-service${NC}"
+echo -e "RDS Endpoint: ${YELLOW}$RDS_ENDPOINT${NC}"
+echo -e "ECR Repository: ${YELLOW}$ECR_URL${NC}"
