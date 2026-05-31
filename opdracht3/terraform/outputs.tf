@@ -21,3 +21,7 @@ output "ecr_repository_url" {
 output "efs_id" {
   value = aws_efs_file_system.shared_logs.id
 }
+
+output "aws_region" {
+  value = var.aws_region
+}

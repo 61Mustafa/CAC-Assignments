@@ -16,13 +16,13 @@ spec:
     spec:
       containers:
       - name: cloudshirt-web
-        image: <REPLACE_WITH_ECR_URL>:latest
+        image: "{{ ecr_repository_url }}:latest"
         ports:
         - containerPort: 80
         env:
         - name: ASPNETCORE_ENVIRONMENT
           value: Production
         - name: ConnectionStrings__CatalogConnection
-          value: "Server=<REPLACE_WITH_RDS_ENDPOINT>;Database=CloudShirtDb;User Id=adminAWS;Password=Komjenietin123;TrustServerCertificate=True;"
+          value: "Server={{ rds_endpoint }};Database=CloudShirtDb;User Id=adminAWS;Password=Komjenietin123;TrustServerCertificate=True;"
         - name: ConnectionStrings__IdentityConnection
-          value: "Server=<REPLACE_WITH_RDS_ENDPOINT>;Database=CloudShirtDb;User Id=adminAWS;Password=Komjenietin123;TrustServerCertificate=True;"
+          value: "Server={{ rds_endpoint }};Database=CloudShirtDb;User Id=adminAWS;Password=Komjenietin123;TrustServerCertificate=True;"
