@@ -1,51 +1,47 @@
-# De bovenste regels zijn comments van de originele makers met tips hoe je dit lokaal kunt runnen.
-# RUN ALL CONTAINERS FROM ROOT (folder with .sln file):
-# docker-compose build
-# docker-compose up
-#
-# RUN JUST THIS CONTAINER FROM ROOT (folder with .sln file):
-# docker build --pull -t web -f src/Web/Dockerfile .
-#
-# RUN COMMAND
-#  docker run --name eshopweb --rm -it -p 5106:5106 web
+# Docker image copy pasted van de github repo zelf : https://github.com/looking4ward/CloudShirt/blob/main/src/Web/Dockerfile
 
-# --- FASE 1: DE BUILD FASE ---
-# Gebruik een zware image van Microsoft waar de hele .NET SDK in zit om de code te kunnen compileren. We noemen deze fase 'build'.
+# --- FASE 1: BUILD FASE ---
+# Gebruik de officiële Microsoft Docker image met de volledige .NET 6 SDK.
+# Deze image bevat alle tools die nodig zijn om .NET code te compileren (dotnet build/publish).
 FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
 
-# Stel de werkmap binnen de container in op '/app'
+# Stel de huidige map in de container in op '/app'.
+# Alle volgende commando's worden standaard vanuit deze map uitgevoerd.
 WORKDIR /app
 
-# Kopieer alle solution bestanden (*.sln) van onze computer/repository naar de '/app' map in de container
+# Kopieer alle .sln-bestanden (solutions) van mijn project naar /app in de container.
+# De solution beschrijft welke projecten bij elkaar horen, zodat dotnet alle dependencies kan vinden.
 COPY *.sln .
 
-# Kopieer daarna alle andere bestanden en mappen naar de container
+# Kopieer nu de rest van de broncode en projectmappen (zoals src/, tests/, etc.) naar /app.
+# Hierdoor heeft de container dezelfde projectstructuur als jouw lokale repository.
 COPY . .
 
-# Verander de werkmap specifiek naar de map waar het webproject staat
+# Ga naar de map van het webproject, waar het Web.csproj bestand staat.
+# Vanaf hier voer je restore en publish uit voor de webapplicatie.
 WORKDIR /app/src/Web
 
-# Download alle benodigde externe bibliotheken (NuGet packages) die het project nodig heeft
+# Haal alle benodigde NuGet packages (externe .NET libraries) op voor dit webproject.
+# Zonder deze stap kan de applicatie niet gecompileerd worden.
 RUN dotnet restore
 
-# Compileer (bouw) de applicatie in de 'Release' (geoptimaliseerde) modus en zet de kant-en-klare bestanden in een map genaamd 'out'
+# Bouw en publiceer de applicatie in Release modus (geoptimaliseerd voor productie).
+# De gecompileerde output wordt in de submap 'out' geplaatst.
 RUN dotnet publish -c Release -o out
 
 
-# --- FASE 2: DE RUNTIME FASE ---
-# Start met een schone, veel lichtere image die alleen nodig is om de app te draaien (geen compilers, alleen de runtime). We noemen dit 'runtime'.
+# --- FASE 2: RUNTIME FASE ---
+# Start een nieuwe, lichte Docker image met alleen de ASP.NET Core 6 runtime.
+# Deze image mist de SDK en build-tools en is daarom kleiner en geschikter om in productie te draaien.
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS runtime
 
-# Stel de werkmap in de nieuwe lichte container weer in op '/app'
+# Stel opnieuw de werkmap in op '/app' in deze tweede (runtime) container.
 WORKDIR /app
 
-# Haal de gecompileerde bestanden uit de zware 'build' container (Fase 1) en plak ze in deze lichte container.
-# Hierdoor wordt onze uiteindelijke Docker image veel kleiner en sneller!
+# Kopieer de gepubliceerde (gecompileerde) bestanden vanuit de build-fase naar deze runtime-container.
+# We nemen alleen de kant-en-klare app mee, niet de volledige broncode of de build-tools.
 COPY --from=build /app/src/Web/out ./
 
-# Optionele comment uit de originele repo: je zou hier de environment kunnen hardcoden, maar wij doen dit al via docker-compose.yml
-# ENV ASPNETCORE_ENVIRONMENT Development
-
-# Het standaard commando dat wordt uitgevoerd zodra deze container wordt opgestart.
-# Het start onze gecompileerde .NET applicatie genaamd 'Web.dll'.
+# Definieer het standaard commando dat wordt uitgevoerd als de container start.
+# Dit start de ASP.NET Core webapplicatie door Web.dll uit te voeren met de .NET runtime.
 ENTRYPOINT ["dotnet", "Web.dll"]
