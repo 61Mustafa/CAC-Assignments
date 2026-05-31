@@ -16,18 +16,15 @@ Parameters:
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
 Resources:
-  # ==========================================
-  # HET MAGAZIJN (REQ-12)
-  # ==========================================
+ # Maak een ECR repo aan in AWS om de docker images op op te slaan.
   CloudShirtECR:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: cloudshirt-repo
       EmptyOnDelete: true
 
-  # ==========================================
-  # DE FABRIEK & DE BAAS (REQ-09)
-  # ==========================================
+  # Maak de manager node aan binnen Swarm, die het werk gaat managen.
+  # Deze zit in je private subnet AZ1, amen met de webserversecuritygroep. Hij is niet van buiten bereikbaar.
   BuildServer:
     Type: AWS::EC2::Instance
     Properties:
@@ -39,6 +36,7 @@ Resources:
         Fn::ImportValue: !Sub "${BaseStackName}:AZ1PrivateSubnet"
       SecurityGroupIds:
         - Fn::ImportValue: !Sub "${BaseStackName}:WebServerSecurityGroup"
+      # Naam van de buildserver op aws - instances tabblad.
       Tags:
         - Key: Name
           Value: Buildserver-SwarmMaster
@@ -47,64 +45,82 @@ Resources:
           - |
             #!/bin/bash
             # 1. STANDAARD INSTALLATIES
+            # Update de standaard installaties van amazon-linux
             yum update -y
+            # Download docker
             amazon-linux-extras install docker -y
+            # Download git, jquery en python
             yum install git jq python3 -y
+            # Start docker
             systemctl start docker
+            # Zet docker als een user aan binnen je ec2
             systemctl enable docker
             usermod -a -G docker ec2-user
-
+            
             # ---------------------------------------------------------
-            # DE BAAS (SWARM MANAGER - REQ-13)
+            # DE BAAS (SWARM MANAGER)
             # ---------------------------------------------------------
+            # Initisaliseer de swarm manager
             docker swarm init
             
+            # Maak de variabelen, TOKEN EN IP zodat later de workers (EC2) de manager kunnen joinen.
             TOKEN=$(docker swarm join-token -q worker)
             IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
             
+            # Deze parameters worden door de Swarm workers in de Launch Template opgehaald om automatisch docker swarm join te doen.
             aws ssm put-parameter --name "/swarm/worker-token" --value "$TOKEN" --type "String" --overwrite --region ${AWS::Region}
             aws ssm put-parameter --name "/swarm/manager-ip" --value "$IP" --type "String" --overwrite --region ${AWS::Region}
             aws ssm put-parameter --name "/swarm/ecr-url" --value "${CloudShirtECR.RepositoryUri}" --type "String" --overwrite --region ${AWS::Region}
-
+            
+            
             # ---------------------------------------------------------
-            # DE FABRIEK (NIGHTLY BUILDS - REQ-11 & REQ-12)
+            # DE FABRIEK (NIGHTLY BUILDS)
             # ---------------------------------------------------------
+            # Dit is een heredoc. Alles tussen cat << 'EOF' en EOF schrijf naar het bestand /opt/build_and_push.sh.
+            # Hiermee definieer je het volledige script in één keer als tekstblok, via CloudFormation user-data.
             cat << 'EOF' > /opt/build_and_push.sh
+            
             #!/bin/bash
             
+            # Ga naar de temp folder en verwijder CAC-Assignments zodat je altijd de laatste versie van je Dockerfile hebt
             cd /tmp
             rm -rf CloudShirt CAC-Assignments
             
+            # Clone de cloudshirt repo van looking4ward en mijn eigen github repo. 
             git clone https://github.com/looking4ward/CloudShirt.git
             git clone https://github.com/61Mustafa/CAC-Assignments.git
+            # Kopieer de Dockerfile uit mijn repo naar de Cloudshirt/Dockerfile folder
             cp CAC-Assignments/opdracht2/Dockerfile CloudShirt/Dockerfile
             
+            # Ga naar de CloudShirt map en bouw de Docker image op basis van de Dockerfile. --pull haalt alleen de laatste base image binnen
             cd CloudShirt
             docker build --pull -t cloudshirt-web:latest -f Dockerfile .
-            
+            # AWS REGIO en ACCOUNT ID 
             REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .region)
             ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+            # Login op aws om toegang te krijgen tot ECR
             aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
-            
+            # hier wordt de docker image gepushed naar de ECR samen met de tag: latest
             ECR_URL=$(aws ssm get-parameter --name "/swarm/ecr-url" --query "Parameter.Value" --output text --region $REGION)
             docker tag cloudshirt-web:latest $ECR_URL:latest
             docker push $ECR_URL:latest
             
             # ---------------------------------------------------------
-            # DE DEPLOYMENT (Taak uitdelen aan de Workers!)
+            # DE DEPLOYMENT
             # ---------------------------------------------------------
+            
+            # Ga naar mijn gekopieerde github repo en desbetreffende map
             cd /tmp/CAC-Assignments/opdracht2
             
-            # We vervangen in de docker-compose dynamisch de Image URL naar de juiste ECR URL
+            # Vervang de docker-compose image url naar de juiste ECR URL.
             sed -i "s|image: .*|image: $ECR_URL:latest|g" docker-compose.yml
             
-            # We zetten de variabelen klaar voor de database verbinding
-            # RDS hostname omzetten naar IP om DNS-problemen in Swarm overlay netwerk te omzeilen
+            # Variabelen voor de DB klaar zetten voor verbinding en de RDS hostname omzetten naar IP om DNS problemen in swarm te voorkomen.
             export RDS_ENDPOINT=$(python3 -c "import socket; print(socket.gethostbyname('${DatabaseEndpoint}'))")
             export RDS_PASSWORD=Komjenietin123
             export RDS_USERNAME=adminAWS
             
-            # De Baas roept over de werkvloer: Deploy de applicatie!
+            # De manager roept over de werkvloer: Deploy de applicatie!
             docker stack deploy --with-registry-auth -c docker-compose.yml cloudshirt
             EOF
             
@@ -112,13 +128,14 @@ Resources:
             /opt/build_and_push.sh
             
             # ---------------------------------------------------------
-            # DE WEKKER (CRONJOB - REQ-11)
+            # DE WEKKER (CRONJOB)
             # ---------------------------------------------------------
             echo "0 3 * * * root /opt/build_and_push.sh >> /var/log/nightly_build.log 2>&1" > /etc/cron.d/nightly_docker_build
             chmod 644 /etc/cron.d/nightly_docker_build
           - DatabaseEndpoint:
               Fn::ImportValue: !Sub "${StorageStackName}:DatabaseEndpoint"
 
+# URL naar mijn ECR docker repo
 Outputs:
   ECRRepositoryUri:
     Description: De URI van je Docker Repository
