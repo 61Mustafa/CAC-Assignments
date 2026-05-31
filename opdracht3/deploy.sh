@@ -22,7 +22,8 @@ export PATH=$PATH:$HOME/.local/bin
 # Controleer of dependencies aanwezig zijn, installeer indien nodig
 if ! command -v ansible &> /dev/null; then
     echo "Ansible niet gevonden. Installeren..."
-    pip3 install --user ansible kubernetes
+    # Probeer eerst zonder --user (nodig in venvs), dan met --user (voor standaard CloudShell)
+    python3 -m pip install ansible kubernetes || python3 -m pip install --user ansible kubernetes
 else
     echo "Ansible is al geïnstalleerd."
 fi
