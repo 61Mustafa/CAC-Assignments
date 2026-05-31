@@ -1,98 +1,78 @@
-# IAM Role voor EKS Cluster
-resource "aws_iam_role" "eks_cluster" {
-  name = "eks-cluster-role"
+#==================================================================
+# 3_eks.tf
+# Managed Kubernetes (EKS): cluster (master), node group (workers)
+# en ECR repository. Vervangt de Swarm-applicatielaag uit
+# 3_application&loadbalancer.yml.
+#==================================================================
 
-  assume_role_policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "eks.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-EOF
+# In de AWS Academy Learner Lab mogen we GEEN eigen IAM-rollen maken.
+# We hergebruiken daarom de bestaande LabRole voor zowel de control
+# plane als de worker nodes.
+data "aws_iam_role" "lab_role" {
+  name = "LabRole"
 }
 
-resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-  role       = aws_iam_role.eks_cluster.name
+#======================================
+# ECR Repository (REQ-18)
+#======================================
+resource "aws_ecr_repository" "cloudshirt" {
+  name         = "cloudshirt-repo"
+  force_delete = true # equivalent van EmptyOnDelete in CloudFormation
+
+  tags = {
+    Name = "CLOUDSHIRT-ECR"
+  }
 }
 
-# EKS Cluster
+#======================================
+# EKS Cluster (de "Master" - REQ-19/20)
+#======================================
 resource "aws_eks_cluster" "main" {
   name     = var.cluster_name
-  role_arn = aws_iam_role.eks_cluster.arn
+  version  = var.cluster_version
+  role_arn = data.aws_iam_role.lab_role.arn
 
   vpc_config {
+    # Control plane spreidt over beide AZ's; publieke subnets erbij zodat
+    # een Service van type LoadBalancer straks een extern IP kan plaatsen.
     subnet_ids = [
-      aws_subnet.private_az1.id,
-      aws_subnet.private_az2.id
+      aws_subnet.az1_private.id,
+      aws_subnet.az2_private.id,
+      aws_subnet.az1_public.id,
+      aws_subnet.az2_public.id,
     ]
+    endpoint_public_access  = true
+    endpoint_private_access = true
   }
 
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_cluster_policy
-  ]
+  tags = {
+    Name = var.cluster_name
+  }
 }
 
-# IAM Role voor Node Group
-resource "aws_iam_role" "eks_nodes" {
-  name = "eks-node-group-role"
-
-  assume_role_policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "ec2.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-EOF
-}
-
-resource "aws_iam_role_policy_attachment" "eks_worker_node_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-  role       = aws_iam_role.eks_nodes.name
-}
-
-resource "aws_iam_role_policy_attachment" "eks_cni_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-  role       = aws_iam_role.eks_nodes.name
-}
-
-resource "aws_iam_role_policy_attachment" "eks_ecr_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-  role       = aws_iam_role.eks_nodes.name
-}
-
-# Node Group
-resource "aws_eks_node_group" "webapp" {
+#======================================
+# Managed Node Group (de "Slave"/workers - REQ-20)
+#======================================
+resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "webapp-nodes"
-  node_role_arn   = aws_iam_role.eks_nodes.arn
-  subnet_ids      = [aws_subnet.private_az1.id, aws_subnet.private_az2.id]
+  node_group_name = "cloudshirt-workers"
+  node_role_arn   = data.aws_iam_role.lab_role.arn
 
-  scaling_config {
-    desired_size = 3
-    max_size     = 5
-    min_size     = 2
-  }
+  # Worker nodes in de private subnets; bereiken ECR/internet via de NAT Gateway.
+  subnet_ids = [
+    aws_subnet.az1_private.id,
+    aws_subnet.az2_private.id,
+  ]
 
   instance_types = ["t3.medium"]
 
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_worker_node_policy,
-    aws_iam_role_policy_attachment.eks_cni_policy,
-    aws_iam_role_policy_attachment.eks_ecr_policy,
-  ]
+  scaling_config {
+    desired_size = 2
+    min_size     = 1
+    max_size     = 3
+  }
+
+  update_config {
+    max_unavailable = 1
+  }
 }

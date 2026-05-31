@@ -1,4 +1,3 @@
----
 - name: Configureer Kubernetes Cluster
   hosts: localhost
   connection: local
