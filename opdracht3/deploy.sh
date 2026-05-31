@@ -28,6 +28,27 @@ else
     echo "Ansible is al geïnstalleerd."
 fi
 
+# Controleer of Terraform aanwezig is
+if ! command -v terraform &> /dev/null; then
+    echo "Terraform niet gevonden. Installeren..."
+    TF_VERSION="1.9.5"
+    ARCH=$(uname -m)
+    if [[ "$ARCH" == "x86_64" ]]; then TF_ARCH="amd64"; else TF_ARCH="arm64"; fi
+    curl -sLO "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_${TF_ARCH}.zip"
+    
+    if command -v unzip &> /dev/null; then
+        unzip -o "terraform_${TF_VERSION}_linux_${TF_ARCH}.zip"
+    else
+        python3 -c "import zipfile, sys; zipfile.ZipFile(sys.argv[1]).extractall()" "terraform_${TF_VERSION}_linux_${TF_ARCH}.zip"
+    fi
+    
+    mkdir -p "$HOME/.local/bin"
+    mv terraform "$HOME/.local/bin/"
+    rm "terraform_${TF_VERSION}_linux_${TF_ARCH}.zip"
+else
+    echo "Terraform is al geïnstalleerd."
+fi
+
 echo "Installeren van Kubernetes collection voor Ansible..."
 ansible-galaxy collection install kubernetes.core --force
 
