@@ -1,40 +1,37 @@
-# Specificeert de versie van de Docker Compose syntax. Versie 3.8 is geschikt voor Docker Swarm.
+# Specifieer de versie van de Docker Compose syntax. Versie 3.8 werkt goed met Docker Swarm.
 version: '3.8'
 
-# Hier definiëren we alle diensten (containers) die onze applicatie nodig heeft.
+# Hier definiëren we alle services (containers) die samen de applicatie vormen.
 services:
-  # De naam van onze webapplicatie service
+  # Service CloudShirt webapplicatie.
   cloudshirt-web:
-    # Geeft aan welke Docker image gebruikt moet worden. De variabelen (${...})
-    # worden straks door onze server automatisch ingevuld met het ECR adres.
+    # De Docker image die we willen draaien. De DOCKER_REGISTRY_URL wordt buitenom ingevuld (door de buildserver).
     image: ${DOCKER_REGISTRY_URL}/cloudshirt-web:latest
 
-    # Hiermee koppelen we poorten van de server aan de container
+    # Publiceer poorten van de container naar de host (EC2 instances).
     ports:
-      # Koppel poort 80 van de EC2 server (links) aan poort 80 binnen de container (rechts).
+      # Stuur verkeer van poort 80 op de EC2-instance (links) door naar poort 80 in de container (rechts).
       - "80:80"
 
-    # Hier stellen we omgevingsvariabelen in die IN de container beschikbaar zijn
+    # Omgevingsvariabelen die binnen in de container beschikbaar zijn voor de .NET app.
     environment:
-      # Vertelt de .NET applicatie dat hij in de 'Production' modus moet draaien (i.p.v. Development)
+      # Draai de applicatie in Productie modus in plaats van Development.
       - ASPNETCORE_ENVIRONMENT=Production
-      # Geeft de database connectiestring door aan de applicatie, zodat deze kan praten met jouw RDS database.
-      # Ook hier gebruiken we ${...} variabelen die later dynamisch worden ingevuld.
+      # Geef de database connection strings door via environment variables, met waarden die we dynamisch invullen (RDS_ENDPOINT, RDS_USERNAME, RDS_PASSWORD).
       - ConnectionStrings__CatalogConnection=Server=${RDS_ENDPOINT};Database=CloudShirtDb;User Id=${RDS_USERNAME};Password=${RDS_PASSWORD};TrustServerCertificate=True;
       - ConnectionStrings__IdentityConnection=Server=${RDS_ENDPOINT};Database=CloudShirtDb;User Id=${RDS_USERNAME};Password=${RDS_PASSWORD};TrustServerCertificate=True;
 
-
-    # Gebruik de VPC DNS resolver zodat AWS-hostnames (RDS, ECR) resolved kunnen worden vanuit de container
+    # Gebruik de VPC DNS resolver zodat AWS hostnames (zoals de RDS endpoint) binnen de container kunnen worden opgezocht.
     dns:
       - 10.0.0.2
 
-    # Configuratie specifiek voor het Docker Swarm cluster
+    # Instellingen die specifiek gelden wanneer deze compose file als Swarm stack wordt gedeployed.
     deploy:
-      # 'replicated' betekent dat we een specifiek aantal identieke containers willen draaien
+      #  Het vaste aantal identieke container instanties die we willen draaien.
       mode: replicated
-      # Hoeveel kopieën (containers) we in totaal over het hele cluster willen verdelen
+      # Totaal aantal containers van deze service in het hele Swarm cluster.
       replicas: 3
-      # Bepaalt wat de Swarm moet doen als de container onverwacht stopt
+      # Bepaalt wat Swarm moet doen als een container crasht.
       restart_policy:
-        # 'on-failure' betekent: start de container opnieuw op als hij crasht (een foutmelding geeft)
+        # Alleen opnieuw starten als de container met een foutcode is gestopt.
         condition: on-failure
