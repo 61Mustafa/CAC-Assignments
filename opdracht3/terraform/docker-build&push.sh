@@ -2,8 +2,7 @@
 set -e
 
 # 1. Regio en account-ID bepalen
-REGION=$(aws configure get region)
-[ -z "$REGION" ] && REGION="us-east-1"
+REGION=$(aws configure get region 2>/dev/null) || REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
 # 2. ECR-URL ophalen uit de Terraform output (draai dit vanuit je terraform map)
@@ -16,9 +15,9 @@ git clone https://github.com/looking4ward/CloudShirt.git
 git clone https://github.com/61Mustafa/CAC-Assignments.git
 cp CAC-Assignments/opdracht2/Dockerfile CloudShirt/Dockerfile
 
-# 4. Image bouwen
+# 4. Image bouwen (DOCKER_BUILDKIT=0 vanwege overlay-fs beperking in CloudShell)
 cd CloudShirt
-docker build --pull -t cloudshirt-web:latest -f Dockerfile .
+DOCKER_BUILDKIT=0 docker build --pull -t cloudshirt-web:latest -f Dockerfile .
 
 # 5. Inloggen op ECR en pushen
 aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
