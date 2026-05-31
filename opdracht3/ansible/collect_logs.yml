@@ -1,0 +1,31 @@
+---
+- name: Verzamel Applicatie Logs
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: Haal de namen van de pods op
+      kubernetes.core.k8s_info:
+        kind: Pod
+        label_selectors:
+          - app=cloudshirt
+        namespace: default
+      register: pod_list
+
+    - name: Zorg dat de log directory bestaat
+      file:
+        path: ../logs
+        state: directory
+
+    - name: Verzamel logs van elke pod
+      kubernetes.core.k8s_log:
+        name: "{{ item.metadata.name }}"
+        namespace: default
+      loop: "{{ pod_list.resources }}"
+      register: pod_logs
+
+    - name: Sla de logs op in bestanden
+      copy:
+        content: "{{ item.stdout }}"
+        dest: "../logs/{{ item.item.metadata.name }}.log"
+      loop: "{{ pod_logs.results }}"
+      when: item.stdout is defined

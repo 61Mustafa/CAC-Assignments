@@ -1,0 +1,16 @@
+---
+- name: Configureer Kubernetes Cluster
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: Zorg dat de Kubernetes Deployment aanwezig is
+      kubernetes.core.k8s:
+        state: present
+        src: ../k8s/deployment.yaml
+        namespace: default
+
+    - name: Zorg dat de Kubernetes Service aanwezig is
+      kubernetes.core.k8s:
+        state: present
+        src: ../k8s/service.yaml
+        namespace: default
