@@ -1,7 +1,6 @@
 #==================================================================
 # 2_data_storage.tf
-# MS SQL Server database (RDS) en een EFS netwerkschijf in de
-# private subnets. Vertaling van 2_data&storage.yml (CloudFormation).
+# MS SQL Server database (RDS) en een EFS netwerkschijf in de private subnets.
 #==================================================================
 
 #======================================
@@ -21,8 +20,7 @@ resource "aws_security_group" "rds" {
     security_groups = [aws_security_group.web.id]
   }
 
-  # Deze regel hoort hier (bij RDS), zodat de EKS worker nodes / pods
-  # de database op poort 1433 kunnen bereiken.
+  # ingress EKS worker nodes / pods zodat de database op poort 1433 kunnen bereiken.
   ingress {
     description     = "MS SQL Server vanaf de EKS worker nodes"
     from_port       = 1433
@@ -31,7 +29,6 @@ resource "aws_security_group" "rds" {
     security_groups = [aws_eks_cluster.main.vpc_config[0].cluster_security_group_id]
   }
 
-  # CloudFormation voegt standaard allow-all egress toe; Terraform niet.
   egress {
     from_port   = 0
     to_port     = 0
@@ -73,9 +70,6 @@ resource "aws_db_instance" "main" {
   multi_az            = false # SQL Server Express ondersteunt geen MultiAZ in RDS
   monitoring_interval = 0
 
-  # CloudFormation maakt voor RDS standaard een final snapshot bij verwijderen.
-  # Voor een lab/test omgeving willen we juist snel en zonder snapshot kunnen
-  # afbreken (zoals je destroy.sh deed), dus skip_final_snapshot = true.
   skip_final_snapshot = true
 
   tags = {

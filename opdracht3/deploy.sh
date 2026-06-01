@@ -7,7 +7,7 @@ ECR_REPO="cloudshirt-repo"
 echo "=== CloudShirt opdracht 3 - Uitrol ==="
 
 # 1. Infrastructuur uitrollen met Terraform
-echo "[1/3] Terraform: infrastructuur uitrollen (dit duurt ~15-20 min voor EKS)..."
+echo "[1/3] Terraform: infrastructuur uitrollen (dit duurt ~15-20 min samen met EKS)..."
 cd terraform
 terraform init -input=false
 terraform apply -auto-approve
@@ -24,9 +24,6 @@ elif aws ecr describe-images --repository-name "$ECR_REPO" --image-ids imageTag=
 else
   echo ""
   echo "  !! Er staat nog geen image in ECR, en deze omgeving kan er geen bouwen."
-  echo "     Doe dit op je laptop vanuit de terraform/ map:"
-  echo "         bash 'docker-build&push.sh'"
-  echo "     Draai daarna dit script opnieuw (Terraform doet niets dubbel)."
   exit 0
 fi
 
@@ -36,4 +33,4 @@ cd ansible
 ansible-playbook -i inventory.ini configure_cluster.yml
 cd ..
 
-echo "=== Klaar! De externe URL staat hierboven in de Ansible-output. ==="
+echo "=== Klaar! De externe URL staat hierboven in de Ansible output. ==="

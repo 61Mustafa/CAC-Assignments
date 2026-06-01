@@ -15,7 +15,7 @@ git clone https://github.com/looking4ward/CloudShirt.git
 git clone https://github.com/61Mustafa/CAC-Assignments.git
 cp CAC-Assignments/opdracht2/Dockerfile CloudShirt/Dockerfile
 
-# 4. Image bouwen (DOCKER_BUILDKIT=0 vanwege overlay-fs beperking in CloudShell)
+# 4. Image bouwen
 cd CloudShirt
 DOCKER_BUILDKIT=0 docker build --pull -t cloudshirt-web:latest -f Dockerfile .
 

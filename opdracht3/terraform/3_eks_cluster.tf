@@ -1,23 +1,19 @@
 #==================================================================
 # 3_eks.tf
-# Managed Kubernetes (EKS): cluster (master), node group (workers)
-# en ECR repository. Vervangt de Swarm-applicatielaag uit
-# 3_application&loadbalancer.yml.
+# Managed Kubernetes (EKS) cluster (master), node group (workers) en ECR repository.
 #==================================================================
 
-# In de AWS Academy Learner Lab mogen we GEEN eigen IAM-rollen maken.
-# We hergebruiken daarom de bestaande LabRole voor zowel de control
-# plane als de worker nodes.
+# We hergebruiken de bestaande LabRole
 data "aws_iam_role" "lab_role" {
   name = "LabRole"
 }
 
 #======================================
-# ECR Repository (REQ-18)
+# ECR Repository
 #======================================
 resource "aws_ecr_repository" "cloudshirt" {
   name         = "cloudshirt-repo"
-  force_delete = true # equivalent van EmptyOnDelete in CloudFormation
+  force_delete = true
 
   tags = {
     Name = "CLOUDSHIRT-ECR"
@@ -25,7 +21,7 @@ resource "aws_ecr_repository" "cloudshirt" {
 }
 
 #======================================
-# EKS Cluster (de "Master" - REQ-19/20)
+# EKS Cluster (de Master)
 #======================================
 resource "aws_eks_cluster" "main" {
   name     = var.cluster_name
@@ -51,7 +47,7 @@ resource "aws_eks_cluster" "main" {
 }
 
 #======================================
-# Managed Node Group (de "Slave"/workers - REQ-20)
+# Managed Node Group (de workers)
 #======================================
 resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name

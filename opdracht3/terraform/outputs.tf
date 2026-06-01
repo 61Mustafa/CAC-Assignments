@@ -1,8 +1,5 @@
 #============================
 # Outputs (fundament)
-# Vervangen de CloudFormation Exports. Binnen één Terraform project
-# verwijzen latere bestanden direct naar de resources; deze outputs
-# zijn handig voor inzicht en eventueel gebruik via remote_state.
 #============================
 
 output "vpc_id" {

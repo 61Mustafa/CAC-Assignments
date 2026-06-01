@@ -4,9 +4,9 @@ set -e
 echo "=== CloudShirt opdracht 3 - Afbreken ==="
 
 # 1. Eerst de Kubernetes resources verwijderen.
-#    De Service (LoadBalancer) MOET als eerste weg: anders blijft de door AWS
+#    De Service (LoadBalancer) MOET als eerste weg, anders blijft de door AWS
 #    aangemaakte load balancer hangen en kan Terraform de VPC niet opruimen.
-echo "[1/2] Kubernetes resources verwijderen (incl. LoadBalancer)..."
+echo "[1/2] Kubernetes resources verwijderen..."
 cd ansible
 ansible-playbook -i inventory.ini destroy_app.yml || true
 cd ..

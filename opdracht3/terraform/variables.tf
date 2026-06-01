@@ -59,7 +59,7 @@ variable "db_password" {
   description = "Master password for the database"
   type        = string
   default     = "Komjenietin123"
-  sensitive   = true # equivalent van NoEcho in CloudFormation
+  sensitive   = true
 }
 
 #============================

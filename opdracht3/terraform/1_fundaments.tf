@@ -1,22 +1,17 @@
 #==================================================================
 # 1_fundaments.tf
-# Base VPC (10.0.0.0/16) met een public en private subnet in twee
-# availability zones. Vertaling van 1_fundaments.yml (CloudFormation).
+# Base VPC (10.0.0.0/16) met een public en private subnet in twee availability zones.
 #==================================================================
 
-# Vervangt !GetAZs '' uit CloudFormation: haalt de beschikbare AZ's
-# van de gekozen regio op zodat we [0] en [1] kunnen gebruiken.
 data "aws_availability_zones" "available" {
   state = "available"
 }
-
 #============================
 # VPC
 #============================
 resource "aws_vpc" "main" {
   cidr_block = var.vpc_cidr
   # Zorgt ervoor dat servers gebruiksvriendelijke DNS namen krijgen
-  # in plaats van alleen IP-adressen.
   enable_dns_hostnames = true
 
   tags = {
@@ -84,8 +79,6 @@ resource "aws_subnet" "az2_private" {
 # Internet Gateway & Route Tables
 #======================================
 
-# In Terraform is het koppelen impliciet: door vpc_id op de IGW te zetten
-# is een aparte VPCGatewayAttachment-resource niet meer nodig.
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
@@ -149,8 +142,6 @@ resource "aws_nat_gateway" "main" {
   tags = {
     Name = "NAT-GATEWAY"
   }
-
-  # Net als de CloudFormation DependsOn op de IGW attachment.
   depends_on = [aws_internet_gateway.main]
 }
 
@@ -188,9 +179,6 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # CloudFormation voegt standaard een allow-all egress toe; Terraform
-  # doet dit NIET automatisch, dus voegen we hem expliciet toe om
-  # hetzelfde gedrag te krijgen.
   egress {
     from_port   = 0
     to_port     = 0
@@ -224,11 +212,6 @@ resource "aws_security_group" "web" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Vervangt WebServerSecurityGroupSelfIngress: alle interne communicatie
-  # tussen de webservers onderling (nodig voor o.a. Docker Swarm).
-  # Inline met self = true i.p.v. een losse resource, omdat Terraform
-  # inline regels en losse security_group_rule resources niet samen op
-  # dezelfde group accepteert.
   ingress {
     description = "Alle interne communicatie tussen de webservers"
     from_port   = 0
