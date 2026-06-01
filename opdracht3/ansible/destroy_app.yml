@@ -1,4 +1,7 @@
 ---
+# Cleanup playbook voor het verwijderen van CloudShirt applicatie resources
+# Wordt gebruikt door destroy.sh om clean Terraform teardown mogelijk te maken
+
 - name: Verwijder de CloudShirt applicatie van het cluster
   hosts: localhost
   gather_facts: false
@@ -6,6 +9,7 @@
     - group_vars/all.yml
 
   tasks:
+    # Stap 1: Verbinding maken met EKS cluster voor cleanup operaties
     - name: Koppel aan het EKS cluster
       ansible.builtin.command: >
         aws eks update-kubeconfig
@@ -13,6 +17,8 @@
         --region {{ aws_region }}
       changed_when: false
 
+    # Stap 2: Service verwijderen (KRITIEK: LoadBalancer eerst verwijderen)
+    # AWS LoadBalancer moet weg voordat Terraform de VPC kan opruimen
     - name: Verwijder de Service (en daarmee de AWS LoadBalancer)
       kubernetes.core.k8s:
         state: absent
@@ -20,6 +26,7 @@
         name: cloudshirt-web
         namespace: default
 
+    # Stap 3: Application pods en containers opruimen
     - name: Verwijder de Deployment
       kubernetes.core.k8s:
         state: absent
@@ -27,6 +34,7 @@
         name: cloudshirt-web
         namespace: default
 
+    # Stap 4: Database credentials opruimen
     - name: Verwijder de Secret
       kubernetes.core.k8s:
         state: absent

@@ -1,11 +1,15 @@
 ---
-- name: Configureer het EKS cluster en deploy de CloudShirt applicatie (REQ-21)
+# Hoofdplaybook voor CloudShirt deployment op EKS cluster
+# Doet de Cluster configuratie en applicatie deployment
+
+- name: Configureer het EKS cluster en deploy de CloudShirt applicatie
   hosts: localhost
   gather_facts: false
   vars_files:
     - group_vars/all.yml
 
   tasks:
+    # Stap 1: Terraform outputs ophalen voor ECR en RDS configuratie
     - name: Haal de Terraform outputs op (ECR URL en RDS endpoint)
       ansible.builtin.command: terraform output -json
       args:
@@ -13,11 +17,13 @@
       register: tf_output
       changed_when: false
 
+    # Stap 2: Terraform outputs omzetten naar Ansible variabelen
     - name: Zet de outputs om naar variabelen
       ansible.builtin.set_fact:
         ecr_url: "{{ (tf_output.stdout | from_json).ecr_repository_url.value }}"
         rds_endpoint: "{{ (tf_output.stdout | from_json).database_endpoint.value }}"
 
+    # Stap 3: kubectl configureren voor EKS cluster toegang
     - name: Koppel Ansible/kubectl aan het EKS cluster (kubeconfig ophalen)
       ansible.builtin.command: >
         aws eks update-kubeconfig
@@ -25,38 +31,44 @@
         --region {{ aws_region }}
       changed_when: false
 
+    # Stap 4: Directory aanmaken voor geprocessede Kubernetes manifests
     - name: Maak een map voor de gerenderde manifests
       ansible.builtin.file:
         path: "{{ rendered_dir }}"
         state: directory
         mode: "0755"
 
+    # Stap 5: K8s templates invullen met runtime waarden (ECR URL, DB endpoint)
     - name: Render de Kubernetes manifests (vul ECR URL en RDS endpoint in)
       ansible.builtin.template:
         src: "{{ k8s_dir }}/{{ item }}"
         dest: "{{ rendered_dir }}/{{ item }}"
       loop:
-        - secret.yaml
-        - deployment.yaml
-        - service.yaml
+        - secret.yaml      # Database credentials
+        - deployment.yaml  # Container deployment configuratie
+        - service.yaml     # LoadBalancer service
 
+    # Stap 6: Database secrets toepassen op cluster
     - name: Pas de Secret toe
       kubernetes.core.k8s:
         state: present
         src: "{{ rendered_dir }}/secret.yaml"
 
+    # Stap 7: Applicatie deployment uitrollen met 5 replicas
     - name: Pas de Deployment toe (5 replicas) en wacht tot hij klaar is
       kubernetes.core.k8s:
         state: present
         src: "{{ rendered_dir }}/deployment.yaml"
         wait: true
-        wait_timeout: 300
+        wait_timeout: 300  # Max 5 minuten wachten op deployment
 
-    - name: Pas de Service toe (LoadBalancer = 1 extern adres, REQ-17)
+    # Stap 8: LoadBalancer service aanmaken voor externe toegang
+    - name: Pas de Service toe (LoadBalancer = 1 extern adres)
       kubernetes.core.k8s:
         state: present
         src: "{{ rendered_dir }}/service.yaml"
 
+    # Stap 9: Wachten tot AWS LoadBalancer provisioning voltooid is
     - name: Wacht tot de LoadBalancer een extern adres heeft
       kubernetes.core.k8s_info:
         kind: Service
@@ -64,9 +76,10 @@
         namespace: default
       register: svc
       until: svc.resources[0].status.loadBalancer.ingress is defined
-      retries: 30
+      retries: 30  # Max 5 minuten wachten (30 * 10s)
       delay: 10
 
+    # Stap 10: Externe URL van de applicatie tonen
     - name: Toon de externe URL van de applicatie
       ansible.builtin.debug:
         msg: "De applicatie is bereikbaar op: http://{{ svc.resources[0].status.loadBalancer.ingress[0].hostname }}"

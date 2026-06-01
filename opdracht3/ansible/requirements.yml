@@ -1,2 +1,4 @@
+# Definieert de benodigde Ansible collections voor Kubernetes operaties
+
 collections:
   - name: kubernetes.core

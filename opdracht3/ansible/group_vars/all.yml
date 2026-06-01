@@ -1,14 +1,14 @@
-# Algemene variabelen voor de playbooks
+# Algemene variabelen voor ansible playbooks
 aws_region:   us-east-1
 cluster_name: cloudshirt-eks
 
-# Paden (relatief t.o.v. de ansible map; draai de playbooks vanuit ansible/)
+# Paden (relatief vanuit ansible/)
 terraform_dir: ../terraform
 k8s_dir:       ../k8s
 rendered_dir:  ./rendered
 logs_dir:      ./logs
 
 # Database-gegevens (gelijk aan variables.tf).
-# Tip voor je verslag: met ansible-vault kun je dit versleuteld opslaan.
+# Deze kunnen ook met ansible-vault versleuteld opgeslagen worden.
 db_user:     adminAWS
 db_password: Komjenietin123
