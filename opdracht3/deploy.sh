@@ -23,7 +23,7 @@ elif aws ecr describe-images --repository-name "$ECR_REPO" --image-ids imageTag=
   echo "[2/3] Image al aanwezig in ECR, bouwen overgeslagen."
 else
   echo ""
-  echo "  !! Er staat nog geen image in ECR, en deze omgeving kan er geen bouwen."
+  echo "  !! Er staat nog geen image in ECR, doe een handmatige deploy via de cloudshell omgeving zelf."
   exit 0
 fi
 
