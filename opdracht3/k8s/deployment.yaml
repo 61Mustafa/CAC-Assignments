@@ -1,3 +1,5 @@
+# Kubernetes Deployment template voor CloudShirt web applicatie
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -5,45 +7,62 @@ metadata:
   namespace: default
   labels:
     app: cloudshirt-web
+
 spec:
+  # Aantal gewenste pod replicas voor high availability
   replicas: 5
+  
+  # Selector om pods te identificeren die door deze deployment beheerd worden
   selector:
     matchLabels:
       app: cloudshirt-web
+  
+  # Template voor de pods die aangemaakt worden
   template:
     metadata:
       labels:
-        app: cloudshirt-web
+        app: cloudshirt-web  # Label dat pods krijgen matched met de selector
+    
     spec:
       containers:
         - name: cloudshirt-web
+          # Container image uit ECR repository
           image: {{ ecr_url }}:latest
+          # Poort waarop de ASP.NET Core applicatie luistert
           ports:
               - containerPort: 80
+          # Omgevingsvariabelen voor de applicatie
           env:
+            # ASP.NET Core production mode
             - name: ASPNETCORE_ENVIRONMENT
               value: "Production"
-            # De connection strings komen uit de Secret (cloudshirt-secrets).
+            
+            # Database connection strings vanuit Kubernetes Secret
             - name: ConnectionStrings__CatalogConnection
               valueFrom:
                 secretKeyRef:
                   name: cloudshirt-secrets
                   key: CatalogConnection
+            
+            # Voor identity database (users, authentication, etc.)
             - name: ConnectionStrings__IdentityConnection
               valueFrom:
                 secretKeyRef:
                   name: cloudshirt-secrets
                   key: IdentityConnection
-          # Zorgt dat de load balancer alleen verkeer stuurt naar pods die echt klaar zijn.
+          
+          # Health check om te controleren of pod klaar is om verkeer te ontvangen
           readinessProbe:
             httpGet:
               path: /
               port: 80
-            initialDelaySeconds: 15
-            periodSeconds: 10
+            initialDelaySeconds: 15  # Wacht 15s voordat eerste check
+            periodSeconds: 10        # Check elke 10s
+          
+          # Health check om te controleren of pod nog werkt
           livenessProbe:
             httpGet:
               path: /
               port: 80
-            initialDelaySeconds: 30
-            periodSeconds: 20
+            initialDelaySeconds: 30  # Wacht 30s voordat eerste check
+            periodSeconds: 20        # Check elke 20s

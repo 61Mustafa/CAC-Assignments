@@ -1,14 +1,22 @@
+# Kubernetes Service voor CloudShirt web applicatie
+
 apiVersion: v1
 kind: Service
 metadata:
   name: cloudshirt-web
   namespace: default
+
 spec:
-  # type LoadBalancer => AWS maakt automatisch een load balancer met één extern adres.
+  # LoadBalancer type instructs AWS to create an external load balancer
+  # Dit zorgt voor één publiek IP/hostname voor externe toegang
   type: LoadBalancer
+  
+  # Selector om pods te vinden die bij deze service horen
   selector:
     app: cloudshirt-web
+  
+  # Poort configuratie voor load balancing
   ports:
-    - port: 80
-      targetPort: 80
-      protocol: TCP
+    - port: 80          # Poort waarop de service bereikbaar is
+      targetPort: 80    # Poort waarop de pods luisteren (containerPort)
+      protocol: TCP     # TCP protocol voor HTTP verkeer
