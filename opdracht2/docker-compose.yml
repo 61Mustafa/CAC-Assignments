@@ -31,6 +31,9 @@ services:
       mode: replicated
       # Totaal aantal containers van deze service in het hele Swarm cluster.
       replicas: 3
+      placement:
+        constraints:
+          - node.role == worker
       # Bepaalt wat Swarm moet doen als een container crasht.
       restart_policy:
         # Altijd herstarten, ook bij een clean exit (code 0).
