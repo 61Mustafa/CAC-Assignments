@@ -130,7 +130,12 @@ Resources:
               aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
 
               # 5. MELDEN BIJ DE BAAS (Swarm Worker - REQ-14)
-              docker swarm join --token $TOKEN $MANAGER_IP:2377
+              # Retry loop: de eerste poging kan mislukken als de manager net gestart is.
+              for i in $(seq 1 10); do
+                docker swarm join --token $TOKEN $MANAGER_IP:2377 && break
+                echo "Swarm join poging $i mislukt, opnieuw proberen in 15s..."
+                sleep 15
+              done
 
               # 6. ECR LOGIN VERNIEUWEN (elke 6 uur, token verloopt na 12 uur)
               cat << 'CRON_ECR' > /etc/cron.d/ecr_login_refresh

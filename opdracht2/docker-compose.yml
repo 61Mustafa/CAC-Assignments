@@ -33,5 +33,8 @@ services:
       replicas: 3
       # Bepaalt wat Swarm moet doen als een container crasht.
       restart_policy:
-        # Alleen opnieuw starten als de container met een foutcode is gestopt.
-        condition: on-failure
+        # Altijd herstarten, ook bij een clean exit (code 0).
+        # 'on-failure' miste gevallen waarbij de .NET app succesvol afsloot maar niet had mogen stoppen.
+        condition: any
+        delay: 5s
+        max_attempts: 10

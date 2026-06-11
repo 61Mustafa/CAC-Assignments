@@ -34,7 +34,7 @@ aws cloudformation deploy \
 # ==========================================
 # 4. Auto Scaling Stack (ASG & Scheduled Actions)
 # ==========================================
-echo "4/6 Deploying Auto Scaling Stack..."
+echo "4/7 Deploying Auto Scaling Stack..."
 aws cloudformation deploy \
   --stack-name MyASGStack \
   --template-file 4_auto_scaling.yml \

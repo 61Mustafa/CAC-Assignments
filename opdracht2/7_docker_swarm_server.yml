@@ -115,8 +115,10 @@ Resources:
             # Vervang de docker-compose image url naar de juiste ECR URL.
             sed -i "s|image: .*|image: $ECR_URL:latest|g" docker-compose.yml
             
-            # Variabelen voor de DB klaar zetten voor verbinding en de RDS hostname omzetten naar IP om DNS problemen in swarm te voorkomen.
-            export RDS_ENDPOINT=$(python3 -c "import socket; print(socket.gethostbyname('${DatabaseEndpoint}'))")
+            # Variabelen voor de DB klaar zetten voor verbinding.
+            # De container gebruikt dns: 10.0.0.2 (VPC resolver), dus de hostname werkt direct.
+            # Een opgelost IP is fragiel: RDS kan van IP wisselen na een failover of herstart.
+            export RDS_ENDPOINT=${DatabaseEndpoint}
             export RDS_PASSWORD=Komjenietin123
             export RDS_USERNAME=adminAWS
             
